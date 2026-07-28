@@ -18,7 +18,7 @@ export class PaystackProvider implements PaymentProvider {
     private readonly client: PaystackClient,
     private readonly secretKey: string,
     private readonly callbackUrl?: string,
-  ) { }
+  ) {}
 
   async createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     const response = await this.client.transaction.initialize({
@@ -26,7 +26,7 @@ export class PaystackProvider implements PaymentProvider {
       email: input.customerEmail,
       currency: input.currency,
       reference: input.reference,
-      callback_url: this.callbackUrl,
+      callback_url: input.callbackUrl ?? this.callbackUrl,
       metadata: this.metadata(input),
     });
     if (!response.status || !response.data) throw new Error(response.message);
@@ -35,6 +35,10 @@ export class PaystackProvider implements PaymentProvider {
       reference: response.data.reference,
       redirectUrl: response.data.authorization_url,
       status: "pending",
+      client: {
+        provider: "paystack",
+        token: response.data.access_code,
+      },
     };
   }
 

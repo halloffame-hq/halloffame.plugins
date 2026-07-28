@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/payment-provider-paystack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Paystack payment provider for Hall Of Fame",
   "type": "module",
   "license": "MIT",
@@ -14,6 +14,10 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "import": "./dist/client.mjs"
     }
   },
   "scripts": {
@@ -22,6 +26,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@paystack/inline-js": "^2.24.0",
     "paystack-sdk": "^3.8.0"
   },
   "devDependencies": {

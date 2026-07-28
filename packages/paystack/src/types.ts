@@ -4,6 +4,7 @@ export interface CheckoutInput {
   amountMinor: number;
   currency: string;
   customerEmail: string;
+  callbackUrl?: string;
   subjectType: string;
   subjectId: string;
   description?: string;
@@ -14,6 +15,10 @@ export interface CheckoutResult {
   reference: string;
   redirectUrl: string | null;
   status: "pending" | "paid";
+  client?: {
+    provider: "paystack";
+    token: string;
+  };
 }
 
 export interface VerifyResult {
@@ -80,6 +85,7 @@ export interface TransactionData {
 
 export interface InitializedData {
   authorization_url: string;
+  access_code: string;
   reference: string;
 }
 

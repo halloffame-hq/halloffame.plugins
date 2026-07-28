@@ -20,6 +20,8 @@ const checkout = {
   amountMinor: 500_000,
   currency: "NGN",
   customerEmail: "payer@example.com",
+  callbackUrl:
+    "https://app.example.com/account/settings/billing?hof_payment_callback=nonce",
   subjectType: "User",
   subjectId: "user-1",
 };
@@ -33,6 +35,7 @@ describe("Paystack payment provider", () => {
       data: {
         reference: checkout.reference,
         authorization_url: "https://checkout.paystack.com/example",
+        access_code: "access_code",
       },
     });
     const provider = createPaymentProvider({
@@ -45,12 +48,18 @@ describe("Paystack payment provider", () => {
       reference: checkout.reference,
       redirectUrl: "https://checkout.paystack.com/example",
       status: "pending",
+      client: {
+        provider: "paystack",
+        token: "access_code",
+      },
     });
     expect(sdk.transaction.initialize).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: "500000",
         email: checkout.customerEmail,
         currency: "NGN",
+        callback_url:
+          "https://app.example.com/account/settings/billing?hof_payment_callback=nonce",
       }),
     );
   });

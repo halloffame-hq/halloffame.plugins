@@ -43,3 +43,37 @@ as the active provider through the platform billing settings.
 
 Do not place the Paystack secret key in `package.json` or commit it to source
 control.
+
+## Client integration
+
+Install the same package in the web or Capacitor client and import the
+browser-only entry:
+
+```ts
+import {
+  createPaystackCallbackUrl,
+  listenForPaystackCallback,
+  resumePaystackPayment,
+} from "@hallofame/payment-provider-paystack/client";
+```
+
+Pass `createPaystackCallbackUrl(window.location.href)` to the API when starting
+the payment. For redirect checkout, register `listenForPaystackCallback` when
+the destination page mounts and use its `verify` callback to call the API's
+authenticated invoice verification endpoint.
+
+When the API checkout response includes `client.provider === 'paystack'`, a
+Capacitor or browser client can keep payment in-app:
+
+```ts
+await resumePaystackPayment({
+  accessCode: checkout.client.token,
+  verify: (reference) => api.verifyInvoice(reference),
+  onVerified: (verification) => {
+    if (verification.status === "paid") refreshBilling();
+  },
+});
+```
+
+InlineJS only completes the customer-facing checkout. Entitlements or campaign
+funds must still wait for the API verification result or a signed webhook.
