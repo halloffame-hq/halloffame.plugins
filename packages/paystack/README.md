@@ -5,7 +5,7 @@ authorizations, and refunds for Hall Of Fame.
 
 ## Installation
 
-Run the installation from the `halloffame.ng.api` directory so the provider is
+Run the installation from the `halloffame.api` directory so the provider is
 recorded as a production dependency:
 
 ```sh
@@ -54,7 +54,7 @@ import {
   createPaystackCallbackUrl,
   listenForPaystackCallback,
   resumePaystackPayment,
-} from "@hallofame/payment-provider-paystack/client";
+} from '@hallofame/payment-provider-paystack/client';
 ```
 
 Pass `createPaystackCallbackUrl(window.location.href)` to the API when starting
@@ -70,7 +70,7 @@ await resumePaystackPayment({
   accessCode: checkout.client.token,
   verify: (reference) => api.verifyInvoice(reference),
   onVerified: (verification) => {
-    if (verification.status === "paid") refreshBilling();
+    if (verification.status === 'paid') refreshBilling();
   },
 });
 ```

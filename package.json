@@ -1,5 +1,5 @@
 {
-  "name": "halloffame.ng.plugins",
+  "name": "halloffame.plugins",
   "private": true,
   "publishConfig": {
     "access": "restricted"
