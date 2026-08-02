@@ -2,6 +2,7 @@ import { Command } from '@h3ravel/musket'
 import { DB } from 'arkormx'
 import { Logger } from '@h3ravel/shared'
 import { ThemeRecord } from '../types'
+import { ThemeRepository } from '../database/ThemeRepository'
 import { connectProjectDatabase } from '../database'
 import { detectHallOfFameProject } from '../project'
 
@@ -67,23 +68,12 @@ export class ThemesCommand extends Command {
         case 'delete':
           if (await this.confirm(`Are you sure you want to delete ${theme.name}`)) {
             const s = this.spinner(`Deleting ${theme.name}...`)
-            await DB.table<ThemeRecord>('themes').where('id', id).delete()
-            await DB.table<ThemeRecord>('themes').where('version', 1).update({ status: 'active' })
+            await this.deleteTheme(theme)
             s.succeed(`${theme.name} deleted successfully.`)
           }
           break
-        case 'details': {
-          const fields: Array<[string, string]> = [
-            ['Name', theme.name],
-            ['Status', String(theme.status)],
-            ['Version', String(theme.version)],
-          ]
-
-          console.log(fields.map(([label, value]) => Logger.log([
-            [label, ['cyan', 'bold']],
-            [`${value}`, 'white'],
-          ], ': ', false)).join('\n'))
-        }
+        case 'details':
+          this.themeDetails(theme)
           break
 
         default:
@@ -92,5 +82,22 @@ export class ThemesCommand extends Command {
     } finally {
       await connection.close()
     }
+  }
+
+  async themeDetails(theme: ThemeRecord) {
+    const fields: Array<[string, string]> = [
+      ['Name', theme.name],
+      ['Status', String(theme.status)],
+      ['Version', String(theme.version)],
+    ]
+
+    console.log(fields.map(([label, value]) => Logger.log([
+      [label, ['cyan', 'bold']],
+      [`${value}`, 'white'],
+    ], ': ', false)).join('\n'))
+  }
+
+  async deleteTheme(theme: ThemeRecord) {
+    await new ThemeRepository().delete(theme)
   }
 }

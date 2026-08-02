@@ -156,4 +156,33 @@ export class ThemeRepository {
       updated_at: entry.now,
     })
   }
+
+  async delete(theme: ThemeRecord) {
+    if (theme.status === 'active') {
+      await DB.table<ThemeRecord>('themes').where('id', theme.id).update({ status: 'archived' })
+      await DB.table<ThemeRecord>('themes').where('version', 1).update({
+        status: 'active',
+        activated_at: new Date()
+      })
+    }
+
+    await DB.table<ThemeRecord>('themes').where('id', theme.id).delete()
+    await this.deleteAttachments(theme)
+
+    await this.audit(DB, {
+      action: 'theme.deleted',
+      subjectType: 'Theme',
+      subjectId: theme.id,
+      summary: `Deleted theme version ${theme.version}.`,
+      metadata: { version: theme.version, source: '@hallofame/cli' },
+      now: new Date(),
+    })
+  }
+
+  async deleteAttachments(theme: ThemeRecord) {
+    await DB.table<ThemeRecord>('media_attachments')
+      .where('attachable_id', theme.id)
+      .where('attachable_type', 'Theme')
+      .delete()
+  }
 }
