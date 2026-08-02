@@ -67,8 +67,8 @@ export class ThemesCommand extends Command {
         case 'delete':
           if (await this.confirm(`Are you sure you want to delete ${theme.name}`)) {
             const s = this.spinner(`Deleting ${theme.name}...`)
-            await DB.table<ThemeRecord>('themes').where('version', 1).update({ status: 'active' })
             await DB.table<ThemeRecord>('themes').where('id', id).delete()
+            await DB.table<ThemeRecord>('themes').where('version', 1).update({ status: 'active' })
             s.succeed(`${theme.name} deleted successfully.`)
           }
           break
