@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Local CLI for Hall of Fame projects",
   "type": "module",
   "license": "MIT",

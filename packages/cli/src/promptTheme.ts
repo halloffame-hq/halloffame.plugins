@@ -10,6 +10,25 @@ import type {
 const RGB =
   /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i;
 const LENGTH = /^\d+(?:\.\d+)?(?:px|rem)$/;
+const DEFAULT_AUTH: ThemeDocument["auth"] = {
+  title: "Your community, your identity, your Hall of Fame.",
+  description:
+    "Connect with people who share your interests, celebrate moments and build a profile that feels like you.",
+};
+const RADIUS_KEYS: Array<keyof ThemeRadii> = [
+  "postCard",
+  "hallCard",
+  "featuredCategoryCard",
+  "recommendedHall",
+  "button",
+  "skeleton",
+  "spotlightCard",
+  "categoryCard",
+  "franklyCard",
+  "anonymousCard",
+  "premiumCard",
+  "pinCard",
+];
 
 const isRgbColor = (value: string): boolean => {
   const match = value.match(RGB);
@@ -45,6 +64,13 @@ export async function promptForTheme(
   source: ThemeDocument,
 ): Promise<ThemeDocument> {
   const document = structuredClone(source);
+  document.auth = { ...DEFAULT_AUTH, ...document.auth };
+  document.shape.radii = Object.fromEntries(
+    RADIUS_KEYS.map((key) => [
+      key,
+      document.shape.radii?.[key] ?? document.shape.radius,
+    ]),
+  ) as unknown as ThemeRadii;
 
   document.identity.name = await valid(
     prompt,
