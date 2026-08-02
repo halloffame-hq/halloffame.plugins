@@ -1,0 +1,95 @@
+import { Command } from '@h3ravel/musket'
+import { DB } from 'arkormx'
+import { Logger } from '@h3ravel/shared'
+import { ThemeRecord } from '../types'
+import { connectProjectDatabase } from '../database'
+import { detectHallOfFameProject } from '../project'
+
+export class ThemesCommand extends Command {
+  signature = 'themes'
+  description = 'Manage all system themes interactively'
+
+  async handle(): Promise<void> {
+    const project = await detectHallOfFameProject()
+
+    this.info(`Detected Hall of Fame ${project.kind} project at ${project.root}.`)
+
+    if (project.kind === 'app') {
+      this.fail(
+        'Theme persistence requires the paired Hall of Fame API project. Run this command from its root.',
+      )
+
+      return
+    }
+
+    const connection = await connectProjectDatabase(project)
+
+    try {
+      const themes = await DB.table<ThemeRecord>('themes')
+        .select({
+          id: true,
+          name: true,
+          version: true,
+          document: true,
+        })
+        .orderBy({ version: 'desc' })
+        .get()
+
+      const id = await this.choice(
+        'Choose Theme:',
+        themes
+          .map((e) => ({
+            name: e.name,
+            value: e.id,
+            description: `Version: ${e.version}`,
+          }))
+          .toArray(),
+      )
+
+      const theme = themes.firstWhere('id', id)
+      if (!theme) {
+        this.error('Invalid Theme')
+        process.exit(0)
+      }
+
+      const action = await this.choice('Action:', [
+        {
+          name: 'Delete Theme',
+          value: 'delete',
+          disabled: theme.version == 1,
+        },
+        { name: 'Details', value: 'details' },
+        { name: 'Exit', value: 'exit' },
+      ])
+
+      switch (action) {
+        case 'delete':
+          if (await this.confirm(`Are you sure you want to delete ${theme.name}`)) {
+            const s = this.spinner(`Deleting ${theme.name}...`)
+            await DB.table<ThemeRecord>('themes').where('version', 1).update({ status: 'active' })
+            await DB.table<ThemeRecord>('themes').where('id', id).delete()
+            s.succeed(`${theme.name} deleted successfully.`)
+          }
+          break
+        case 'details': {
+          const fields: Array<[string, string]> = [
+            ['Name', theme.name],
+            ['Status', String(theme.status)],
+            ['Version', theme.name],
+          ]
+
+          console.log(fields.map(([label, value]) => Logger.log([
+            [label, ['cyan', 'bold']],
+            [`${value}`, 'white'],
+          ], ': ', false)).join('\n'))
+        }
+          break
+
+        default:
+          process.exit(0)
+      }
+    } finally {
+      await connection.close()
+    }
+  }
+}

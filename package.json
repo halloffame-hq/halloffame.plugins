@@ -11,6 +11,8 @@
     "check": "pnpm lint && pnpm -r check",
     "lint": "eslint .",
     "test": "pnpm -r test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "publish:packages": "pnpm -r --filter \"@hallofame/*\" publish -tag latest"
   },
   "devDependencies": {

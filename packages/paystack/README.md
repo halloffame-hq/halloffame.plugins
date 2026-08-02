@@ -54,7 +54,7 @@ import {
   createPaystackCallbackUrl,
   listenForPaystackCallback,
   resumePaystackPayment,
-} from '@hallofame/payment-provider-paystack/client';
+} from '@hallofame/payment-provider-paystack/client'
 ```
 
 Pass `createPaystackCallbackUrl(window.location.href)` to the API when starting
@@ -70,9 +70,9 @@ await resumePaystackPayment({
   accessCode: checkout.client.token,
   verify: (reference) => api.verifyInvoice(reference),
   onVerified: (verification) => {
-    if (verification.status === 'paid') refreshBilling();
+    if (verification.status === 'paid') refreshBilling()
   },
-});
+})
 ```
 
 InlineJS only completes the customer-facing checkout. Entitlements or campaign

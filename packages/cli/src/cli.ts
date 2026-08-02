@@ -1,14 +1,28 @@
-import type { Application } from "@h3ravel/musket";
-import { CustomizeCommand } from "./commands/CustomizeCommand.js";
-import { Kernel } from "@h3ravel/musket";
+import type { Application } from '@h3ravel/musket'
+import { CustomizeCommand } from './commands/CustomizeCommand.js'
+import { Kernel } from '@h3ravel/musket'
+import { ThemesCommand } from './commands/ThemesCommand.js'
+import { version } from '../package.json'
 
-class CustomizationApplication { }
+class CustomizationApplication implements Application {}
 
-await Kernel.init(new CustomizationApplication() as Application, {
-  name: "halloffame",
-  baseCommands: [CustomizeCommand],
-  packages: ["@hallofame/cli", "@h3ravel/musket", "arkormx"],
+await Kernel.init(new CustomizationApplication(), {
+  version,
+  name: 'halloffame',
+  logo: String.raw`
+ _  _  __  ___    ____   _  
+| || |/__\| __|  / _/ | | | 
+| >< | \/ | _|  | \_| |_| | 
+|_||_|\__/|_|    \__/___|_|`,
+  baseCommands: [CustomizeCommand, ThemesCommand],
+  packages: [/**{ name: '@hallofame/cli', base: true }, */ '@h3ravel/musket', 'arkormx'],
+  versionFormatter(pkgs, meta) {
+    return pkgs
+      .filter((e) => e.name !== 'Unknown')
+      .map(meta.format)
+      .join(meta.separator)
+  },
   exceptionHandler(exception) {
     throw exception
   },
-});
+})

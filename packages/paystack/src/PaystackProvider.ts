@@ -5,14 +5,14 @@ import type {
   PaystackClient,
   VerifyResult,
   WebhookResult,
-} from "./types";
+} from './types'
 
-import { parsePaystackWebhook } from "./webhook";
-import { transactionStatus } from "./status";
+import { parsePaystackWebhook } from './webhook'
+import { transactionStatus } from './status'
 
 export class PaystackProvider implements PaymentProvider {
-  readonly name = "paystack";
-  readonly label = "Paystack";
+  readonly name = 'paystack'
+  readonly label = 'Paystack'
 
   constructor(
     private readonly client: PaystackClient,
@@ -28,18 +28,18 @@ export class PaystackProvider implements PaymentProvider {
       reference: input.reference,
       callback_url: input.callbackUrl ?? this.callbackUrl,
       metadata: this.metadata(input),
-    });
-    if (!response.status || !response.data) throw new Error(response.message);
+    })
+    if (!response.status || !response.data) throw new Error(response.message)
 
     return {
       reference: response.data.reference,
       redirectUrl: response.data.authorization_url,
-      status: "pending",
+      status: 'pending',
       client: {
-        provider: "paystack",
+        provider: 'paystack',
         token: response.data.access_code,
       },
-    };
+    }
   }
 
   async chargePaymentMethod(
@@ -53,47 +53,43 @@ export class PaystackProvider implements PaymentProvider {
       currency: input.currency,
       reference: input.reference,
       metadata: this.metadata(input),
-    });
-    if (!response.status || !response.data) throw new Error(response.message);
+    })
+    if (!response.status || !response.data) throw new Error(response.message)
 
     return {
       reference: response.data.reference,
       redirectUrl: null,
-      status:
-        transactionStatus(response.data.status) === "paid" ? "paid" : "pending",
-    };
+      status: transactionStatus(response.data.status) === 'paid' ? 'paid' : 'pending',
+    }
   }
 
   async verify(reference: string): Promise<VerifyResult> {
-    const response = await this.client.transaction.verify(reference);
-    if (!response.status || !response.data) return { status: "failed" };
+    const response = await this.client.transaction.verify(reference)
+    if (!response.status || !response.data) return { status: 'failed' }
 
     return {
       status: transactionStatus(response.data.status),
       paidAt: response.data.paid_at ? new Date(response.data.paid_at) : null,
       amountMinor: Number(response.data.amount),
       currency: response.data.currency,
-    };
+    }
   }
 
   async parseWebhook(
     rawBody: string,
     headers: Record<string, string | undefined>,
   ): Promise<WebhookResult | null> {
-    return parsePaystackWebhook(this.secretKey, rawBody, headers);
+    return parsePaystackWebhook(this.secretKey, rawBody, headers)
   }
 
-  async refund(
-    reference: string,
-    amountMinor?: number,
-  ): Promise<{ status: string }> {
+  async refund(reference: string, amountMinor?: number): Promise<{ status: string }> {
     const response = await this.client.refund.create({
       transaction: reference,
       amount: amountMinor,
-    });
-    if (!response.status || !response.data) throw new Error(response.message);
+    })
+    if (!response.status || !response.data) throw new Error(response.message)
 
-    return { status: response.data.status ?? "pending" };
+    return { status: response.data.status ?? 'pending' }
   }
 
   private metadata(input: CheckoutInput): Record<string, unknown> {
@@ -103,6 +99,6 @@ export class PaystackProvider implements PaymentProvider {
       subject_id: input.subjectId,
       description: input.description,
       ...input.metadata,
-    };
+    }
   }
 }
