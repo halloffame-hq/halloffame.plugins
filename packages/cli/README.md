@@ -1,4 +1,4 @@
-# Hall of Fame customization CLI
+# Hall of Fame CLI
 
 CLI to interact with Hall of Fame installations, powered by
 [`@h3ravel/musket`](https://h3ravel.toneflix.net/musket/).
@@ -11,6 +11,12 @@ Install the package in a Hall of Fame API or app project:
 pnpm add -D @hallofame/cli
 ```
 
+OR Global install it for use in any Hall of Fame project:
+
+```sh
+pnpm i -g @hallofame/cli
+```
+
 The command only runs from a recognized Hall of Fame project root. It detects whether the current
 project is the API or client app from its package identity and required source markers.
 
@@ -19,8 +25,18 @@ project is the API or client app from its package identity and required source m
 Run this from the Hall of Fame API root:
 
 ```sh
-pnpm exec hof customize
+pnpm exec hof [command] [options]
 ```
+
+Or for global installs, run this from any Hall of Fame project root:
+
+```sh
+hof [command] [options]
+```
+
+## Commands
+
+### `hof customize`
 
 The command reads the API application's `.env`, connects to the configured database through
 ArkORM, and prompts for:
