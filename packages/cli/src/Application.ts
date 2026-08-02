@@ -1,11 +1,11 @@
 import { ProjectDatabase, connectProjectDatabase } from './database'
 
-import { Application as BaseApp } from '@h3ravel/musket'
+import type { Application as BaseApp } from '@h3ravel/musket'
 import { HallOfFameProject } from './types'
 import { Logger } from '@h3ravel/shared'
 import { detectHallOfFameProject } from './project'
 
-export class Application extends BaseApp {
+export class Application implements BaseApp {
     project!: HallOfFameProject
     connection!: ProjectDatabase
 
