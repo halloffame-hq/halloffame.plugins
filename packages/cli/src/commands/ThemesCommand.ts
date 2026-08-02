@@ -55,12 +55,12 @@ export class ThemesCommand extends Command {
       }
 
       const action = await this.choice('Action:', [
+        { name: 'Details', value: 'details' },
         {
           name: 'Delete Theme',
           value: 'delete',
           disabled: theme.version == 1,
         },
-        { name: 'Details', value: 'details' },
         { name: 'Exit', value: 'exit' },
       ])
 
