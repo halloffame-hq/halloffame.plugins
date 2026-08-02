@@ -22,62 +22,58 @@ export class ThemesCommand extends Command<Application> {
       return
     }
 
-    try {
-      const themes = await DB.table<ThemeRecord>('themes')
-        .select({
-          id: true,
-          name: true,
-          status: true,
-          version: true,
-          document: true,
-        })
-        .orderBy({ version: 'desc' })
-        .get()
+    const themes = await DB.table<ThemeRecord>('themes')
+      .select({
+        id: true,
+        name: true,
+        status: true,
+        version: true,
+        document: true,
+      })
+      .orderBy({ version: 'desc' })
+      .get()
 
-      const id = await this.choice(
-        'Choose Theme:',
-        themes
-          .map((e) => ({
-            name: e.name,
-            value: e.id,
-            description: `Version: ${e.version}`,
-          }))
-          .toArray(),
-      )
+    const id = await this.choice(
+      'Choose Theme:',
+      themes
+        .map((e) => ({
+          name: e.name,
+          value: e.id,
+          description: `Version: ${e.version}`,
+        }))
+        .toArray(),
+    )
 
-      const theme = themes.firstWhere('id', id)
-      if (!theme) {
-        this.error('Invalid Theme')
+    const theme = themes.firstWhere('id', id)
+    if (!theme) {
+      this.error('Invalid Theme')
+      process.exit(0)
+    }
+
+    const action = await this.choice('Action:', [
+      { name: 'Details', value: 'details' },
+      {
+        name: 'Delete Theme',
+        value: 'delete',
+        disabled: theme.version == 1,
+      },
+      { name: 'Exit', value: 'exit' },
+    ])
+
+    switch (action) {
+      case 'delete':
+        if (await this.confirm(`Are you sure you want to delete ${theme.name}`)) {
+          const s = this.spinner(`Deleting ${theme.name}...`)
+          await this.deleteTheme(theme)
+          s.succeed(`${theme.name} deleted successfully.`)
+        }
+        break
+      case 'details':
+        this.themeDetails(theme)
+        break
+
+      default:
         process.exit(0)
-      }
-
-      const action = await this.choice('Action:', [
-        { name: 'Details', value: 'details' },
-        {
-          name: 'Delete Theme',
-          value: 'delete',
-          disabled: theme.version == 1,
-        },
-        { name: 'Exit', value: 'exit' },
-      ])
-
-      switch (action) {
-        case 'delete':
-          if (await this.confirm(`Are you sure you want to delete ${theme.name}`)) {
-            const s = this.spinner(`Deleting ${theme.name}...`)
-            await this.deleteTheme(theme)
-            s.succeed(`${theme.name} deleted successfully.`)
-          }
-          break
-        case 'details':
-          this.themeDetails(theme)
-          break
-
-        default:
-          process.exit(0)
-      }
-    } finally {
-      await this.app.connection.close()
     }
   }
 

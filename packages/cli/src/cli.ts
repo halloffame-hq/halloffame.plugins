@@ -5,7 +5,6 @@ import { ThemesCommand } from './commands/ThemesCommand'
 import { version } from '../package.json'
 
 await Kernel.init(await Application.init(), {
-  version,
   name: 'halloffame',
   logo: String.raw`
  _  _  __  ___    ____   _  
@@ -13,7 +12,7 @@ await Kernel.init(await Application.init(), {
 | >< | \/ | _|  | \_| |_| | 
 |_||_|\__/|_|    \__/___|_|`,
   baseCommands: [CustomizeCommand, ThemesCommand],
-  packages: [/**{ name: '@hallofame/cli', base: true }, */ '@h3ravel/musket', 'arkormx'],
+  packages: [{ name: '@hallofame/cli', version, base: true }, '@h3ravel/musket', 'arkormx'],
   versionFormatter(pkgs, meta) {
     return pkgs
       .filter((e) => e.name !== 'Unknown')

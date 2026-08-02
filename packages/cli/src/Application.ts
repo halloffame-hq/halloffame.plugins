@@ -1,11 +1,11 @@
 import { ProjectDatabase, connectProjectDatabase } from './database'
 
-import type { Application as BaseApp } from '@h3ravel/musket'
+import { Application as BaseApp } from '@h3ravel/musket'
 import { HallOfFameProject } from './types'
 import { Logger } from '@h3ravel/shared'
 import { detectHallOfFameProject } from './project'
 
-export class Application implements BaseApp {
+export class Application extends BaseApp {
     project!: HallOfFameProject
     connection!: ProjectDatabase
 
@@ -15,6 +15,10 @@ export class Application implements BaseApp {
             app.project = await detectHallOfFameProject()
 
             app.connection = await connectProjectDatabase(app.project)
+
+            app.musket?.afterHandle.once(async ({ app }) => {
+                await app.connection.close()
+            })
 
             return app
         } catch (error) {
