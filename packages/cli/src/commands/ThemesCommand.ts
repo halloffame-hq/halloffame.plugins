@@ -29,6 +29,7 @@ export class ThemesCommand extends Command {
         .select({
           id: true,
           name: true,
+          status: true,
           version: true,
           document: true,
         })
@@ -75,7 +76,7 @@ export class ThemesCommand extends Command {
           const fields: Array<[string, string]> = [
             ['Name', theme.name],
             ['Status', String(theme.status)],
-            ['Version', theme.name],
+            ['Version', String(theme.version)],
           ]
 
           console.log(fields.map(([label, value]) => Logger.log([
