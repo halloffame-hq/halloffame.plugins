@@ -1,17 +1,16 @@
+import { Application } from '../Application'
 import { Command } from '@h3ravel/musket'
 import { DB } from 'arkormx'
 import { Logger } from '@h3ravel/shared'
 import { ThemeRecord } from '../types'
 import { ThemeRepository } from '../database/ThemeRepository'
-import { connectProjectDatabase } from '../database'
-import { detectHallOfFameProject } from '../project'
 
-export class ThemesCommand extends Command {
+export class ThemesCommand extends Command<Application> {
   signature = 'themes'
   description = 'Manage all system themes interactively'
 
   async handle(): Promise<void> {
-    const project = await detectHallOfFameProject()
+    const project = this.app.project
 
     this.info(`Detected Hall of Fame ${project.kind} project at ${project.root}.`)
 
@@ -22,8 +21,6 @@ export class ThemesCommand extends Command {
 
       return
     }
-
-    const connection = await connectProjectDatabase(project)
 
     try {
       const themes = await DB.table<ThemeRecord>('themes')
@@ -80,7 +77,7 @@ export class ThemesCommand extends Command {
           process.exit(0)
       }
     } finally {
-      await connection.close()
+      await this.app.connection.close()
     }
   }
 

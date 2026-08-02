@@ -158,24 +158,26 @@ export class ThemeRepository {
   }
 
   async delete(theme: ThemeRecord) {
-    if (theme.status === 'active') {
-      await DB.table<ThemeRecord>('themes').where('id', theme.id).update({ status: 'archived' })
-      await DB.table<ThemeRecord>('themes').where('version', 1).update({
-        status: 'active',
-        activated_at: new Date()
+    return DB.transaction(async (database) => {
+      if (theme.status === 'active') {
+        await database.table<ThemeRecord>('themes').where('id', theme.id).update({ status: 'archived' })
+        await database.table<ThemeRecord>('themes').where('version', 1).update({
+          status: 'active',
+          activated_at: new Date()
+        })
+      }
+
+      await database.table<ThemeRecord>('themes').where('id', theme.id).delete()
+      await this.deleteAttachments(theme)
+
+      await this.audit(database, {
+        action: 'theme.deleted',
+        subjectType: 'Theme',
+        subjectId: theme.id,
+        summary: `Deleted theme version ${theme.version}.`,
+        metadata: { version: theme.version, source: '@hallofame/cli' },
+        now: new Date(),
       })
-    }
-
-    await DB.table<ThemeRecord>('themes').where('id', theme.id).delete()
-    await this.deleteAttachments(theme)
-
-    await this.audit(DB, {
-      action: 'theme.deleted',
-      subjectType: 'Theme',
-      subjectId: theme.id,
-      summary: `Deleted theme version ${theme.version}.`,
-      metadata: { version: theme.version, source: '@hallofame/cli' },
-      now: new Date(),
     })
   }
 

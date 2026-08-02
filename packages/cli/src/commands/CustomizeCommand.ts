@@ -1,16 +1,15 @@
 import { promptForSystemOptions, promptForTheme } from '../promptTheme'
 
+import { Application } from '../Application'
 import { Command } from '@h3ravel/musket'
 import { ThemeRepository } from '../database/ThemeRepository'
-import { connectProjectDatabase } from '../database'
-import { detectHallOfFameProject } from '../project'
 
-export class CustomizeCommand extends Command {
+export class CustomizeCommand extends Command<Application> {
   signature = 'customize'
   description = 'Interactively customize a Hall of Fame installation'
 
   async handle(): Promise<void> {
-    const project = await detectHallOfFameProject()
+    const project = this.app.project
 
     this.info(`Detected Hall of Fame ${project.kind} project at ${project.root}.`)
 
@@ -21,8 +20,6 @@ export class CustomizeCommand extends Command {
 
       return
     }
-
-    const connection = await connectProjectDatabase(project)
 
     try {
       const repository = new ThemeRepository()
@@ -45,7 +42,7 @@ export class CustomizeCommand extends Command {
         `${activate ? 'Applied' : 'Created'} theme version ${theme.version}: ${theme.name}`,
       )
     } finally {
-      await connection.close()
+      await this.app.connection.close()
     }
   }
 }

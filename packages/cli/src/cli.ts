@@ -1,12 +1,10 @@
-import type { Application } from '@h3ravel/musket'
-import { CustomizeCommand } from './commands/CustomizeCommand.js'
+import { Application } from './Application'
+import { CustomizeCommand } from './commands/CustomizeCommand'
 import { Kernel } from '@h3ravel/musket'
-import { ThemesCommand } from './commands/ThemesCommand.js'
+import { ThemesCommand } from './commands/ThemesCommand'
 import { version } from '../package.json'
 
-class CustomizationApplication implements Application {}
-
-await Kernel.init(new CustomizationApplication(), {
+await Kernel.init(await Application.init(), {
   version,
   name: 'halloffame',
   logo: String.raw`
