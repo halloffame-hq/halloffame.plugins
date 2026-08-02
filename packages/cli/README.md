@@ -20,7 +20,7 @@ pnpm i -g @hallofame/cli
 The command only runs from a recognized Hall of Fame project root. It detects whether the current
 project is the API or client app from its package identity and required source markers.
 
-## Customize the installed system
+## Usage
 
 Run this from the Hall of Fame API root:
 
@@ -36,7 +36,7 @@ hof [command] [options]
 
 ## Commands
 
-### `hof customize`
+### `hof customize` - Customize the installed system
 
 The command reads the API application's `.env`, connects to the configured database through
 ArkORM, and prompts for:
