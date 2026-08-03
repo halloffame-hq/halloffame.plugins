@@ -9,7 +9,7 @@ import { Application } from '../Application'
 import { Command } from '@h3ravel/musket'
 import type { SignatureBuilder } from '@h3ravel/musket'
 import { readFile, writeFile } from 'node:fs/promises'
-import { resolveProjectPair } from '../localization/pairing'
+import { ProjectPair, resolveProjectPair } from '../localization/pairing'
 import path from 'node:path'
 
 export class LocalizeCommand extends Command<Application> {
@@ -73,41 +73,45 @@ export class LocalizeCommand extends Command<Application> {
     }
   }
 
-  private async export(pair: Awaited<ReturnType<typeof resolveProjectPair>>): Promise<void> {
+  private async export(pair: ProjectPair): Promise<void> {
     const locale = ((this.option('locale') as string) || (await this.ask('Target locale', 'es')))
       .trim()
       .toLowerCase()
 
     const file = path.resolve(
       (this.option('file') as string) ||
-      (await this.ask('Bundle file', `localization-${locale}.json`)),
+        (await this.ask('Bundle file', `localization-${locale}.json`)),
     )
 
     const spinner = this.spinner(`Building ${locale} bundle...`)
     const bundle = await buildBundle(pair, locale)
+
     await writeFile(file, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8')
     spinner.succeed(`Wrote ${file}`)
 
     const stats = bundleStats(bundle)
+
     this.info(
       `API: ${stats.api.translated}/${stats.api.total} translated (${stats.api.missing} missing).`,
     )
+
     this.info(
       `Client: ${stats.client.translated}/${stats.client.total} translated (${stats.client.missing} missing).`,
     )
+
     this.success(
       `Edit the target values, then run "hof localize apply --file ${path.basename(file)}".`,
     )
   }
 
-  private async apply(pair: Awaited<ReturnType<typeof resolveProjectPair>>): Promise<void> {
+  private async apply(pair: ProjectPair): Promise<void> {
     const file = path.resolve(
       (this.option('file') as string) || (await this.ask('Bundle file', 'localization.json')),
     )
 
     let bundle: LocalizationBundle
     try {
-      bundle = JSON.parse(await readFile(file, 'utf8')) as LocalizationBundle
+      bundle = JSON.parse(await readFile(file, 'utf8'))
     } catch (error) {
       this.fail(`Could not read bundle ${file}: ${error instanceof Error ? error.message : error}`)
 
@@ -128,6 +132,7 @@ export class LocalizeCommand extends Command<Application> {
 
     const spinner = this.spinner(`Applying ${bundle.targetLocale} translations...`)
     const result = await applyBundle(pair, bundle)
+
     spinner.succeed(
       `Applied ${result.api} API and ${result.client} client ${result.targetLocale} strings.`,
     )

@@ -27,6 +27,7 @@ const exists = async (file: string): Promise<boolean> => {
 export async function detectHallOfFameProject(cwd = process.cwd()): Promise<HallOfFameProject> {
   const root = path.resolve(cwd)
   const manifestPath = path.join(root, 'package.json')
+
   if (!(await exists(manifestPath))) {
     throw new Error('Run this command from a Hall of Fame API or app project root.')
   }

@@ -40,8 +40,10 @@ export async function resolveProjectPair(
   const counterpart: ProjectKind = project.kind === 'api' ? 'app' : 'api'
 
   const explicit = override[counterpart]
+
   if (explicit) {
     const detected = await detectHallOfFameProject(explicit)
+
     if (detected.kind !== counterpart) {
       throw new Error(`Expected a Hall of Fame ${counterpart} project at ${explicit}.`)
     }
@@ -49,11 +51,14 @@ export async function resolveProjectPair(
   } else {
     const parent = path.dirname(project.root)
     const entries = await readdir(parent, { withFileTypes: true })
+
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
       const candidate = path.join(parent, entry.name)
+
       if (candidate === project.root) continue
       const detected = await tryDetect(candidate)
+
       if (detected?.kind === counterpart) {
         roots[counterpart] = detected.root
         break
