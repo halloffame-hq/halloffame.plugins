@@ -1,6 +1,7 @@
 import { Application } from './Application'
 import { CustomizeCommand } from './commands/CustomizeCommand'
 import { Kernel } from '@h3ravel/musket'
+import { LocalizeCommand } from './commands/LocalizeCommand'
 import { ThemesCommand } from './commands/ThemesCommand'
 import { version } from '../package.json'
 
@@ -11,10 +12,8 @@ await Kernel.init(await Application.init(), {
 | || |/__\| __|  / _/ | | | 
 | >< | \/ | _|  | \_| |_| | 
 |_||_|\__/|_|    \__/___|_|`,
-  baseCommands: [CustomizeCommand, ThemesCommand],
-  packages: [
-    { name: '@hallofame/cli', version, alias: 'HOF CLI', base: true },
-  ],
+  baseCommands: [CustomizeCommand, ThemesCommand, LocalizeCommand],
+  packages: [{ name: '@hallofame/cli', version, alias: 'HOF CLI', base: true }],
   versionFormatter(pkgs, meta) {
     return pkgs
       .filter((e) => e.name !== 'Unknown')

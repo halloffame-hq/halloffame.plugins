@@ -6,26 +6,37 @@ import { Logger } from '@h3ravel/shared'
 import { detectHallOfFameProject } from './project'
 
 export class Application extends BaseApp {
-    project!: HallOfFameProject
-    connection!: ProjectDatabase
+  project!: HallOfFameProject
+  private connection?: ProjectDatabase
 
-    static async init() {
-        try {
-            const app = new Application()
-            app.project = await detectHallOfFameProject()
+  static async init() {
+    try {
+      const app = new Application()
+      app.project = await detectHallOfFameProject()
 
-            app.connection = await connectProjectDatabase(app.project)
+      return app
+    } catch (error) {
+      Logger.error(error instanceof Error ? error.message : String(error))
+      process.exit(1)
+    }
+  }
 
-            return app
-        } catch (error) {
-            Logger.error(error instanceof Error ? error.message : String(error))
-            process.exit(1)
-        }
+  /**
+   * Lazily connect to the project database. Commands that never touch the
+   * database (for example the localization round-trip) skip the connection
+   * entirely, which lets them run from the app root as well as the API root.
+   */
+  async database(): Promise<ProjectDatabase> {
+    if (!this.connection) {
+      this.connection = await connectProjectDatabase(this.project)
     }
 
-    registerMusketListeners(musket: Musket<this>): void {
-        musket.afterHandle.once(async () => {
-            await this.connection.close()
-        })
-    }
+    return this.connection
+  }
+
+  registerMusketListeners(musket: Musket<this>): void {
+    musket.afterHandle.once(async () => {
+      if (this.connection) await this.connection.close()
+    })
+  }
 }

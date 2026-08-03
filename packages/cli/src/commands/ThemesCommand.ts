@@ -22,6 +22,8 @@ export class ThemesCommand extends Command<Application> {
       return
     }
 
+    await this.app.database()
+
     const themes = await DB.table<ThemeRecord>('themes')
       .select({
         id: true,
@@ -84,10 +86,20 @@ export class ThemesCommand extends Command<Application> {
       ['Version', String(theme.version)],
     ]
 
-    console.log(fields.map(([label, value]) => Logger.log([
-      [label, ['cyan', 'bold']],
-      [`${value}`, 'white'],
-    ], ': ', false)).join('\n'))
+    console.log(
+      fields
+        .map(([label, value]) =>
+          Logger.log(
+            [
+              [label, ['cyan', 'bold']],
+              [`${value}`, 'white'],
+            ],
+            ': ',
+            false,
+          ),
+        )
+        .join('\n'),
+    )
   }
 
   async deleteTheme(theme: ThemeRecord) {

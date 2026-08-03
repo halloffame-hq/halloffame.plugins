@@ -160,10 +160,13 @@ export class ThemeRepository {
   async delete(theme: ThemeRecord) {
     return DB.transaction(async (database) => {
       if (theme.status === 'active') {
-        await database.table<ThemeRecord>('themes').where('id', theme.id).update({ status: 'archived' })
+        await database
+          .table<ThemeRecord>('themes')
+          .where('id', theme.id)
+          .update({ status: 'archived' })
         await database.table<ThemeRecord>('themes').where('version', 1).update({
           status: 'active',
-          activated_at: new Date()
+          activated_at: new Date(),
         })
       }
 

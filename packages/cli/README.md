@@ -51,3 +51,25 @@ ArkORM, and prompts for:
 The active theme's existing logo, dark logo, favicon, and authentication artwork are copied into
 the new version. Theme and system-setting changes are recorded in the platform audit log as local
 CLI actions.
+
+### `hof localize` - Round-trip localization for API and client copy
+
+Export a single bundle covering both the API message catalogue and the client locale files, hand it
+to a translator, then apply the edited bundle back into each side. The command finds the paired
+project automatically (scanning sibling directories), so it runs from either the API or the app
+root; pass `--api-root` / `--app-root` to point at them explicitly.
+
+```sh
+# Export English source plus any existing target copy into one file
+hof localize export --locale es --file localization-es.json
+
+# ...edit the "target" values in the bundle, then write them back
+hof localize apply --file localization-es.json
+```
+
+Every entry carries the English `source` and the current `target` (empty when untranslated), so the
+bundle doubles as a coverage report. Applying is additive and non-destructive: only non-empty
+targets are written, existing translations for other keys and locales are left untouched, and an
+untranslated entry simply falls back to English at runtime. Writes match each catalogue's formatting
+(the API module's Prettier wrapping and the locale files' newline convention), so an unedited
+round-trip produces no diff.

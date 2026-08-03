@@ -21,6 +21,8 @@ export class CustomizeCommand extends Command<Application> {
       return
     }
 
+    await this.app.database()
+
     const repository = new ThemeRepository()
     const active = await repository.active()
 
