@@ -12,7 +12,11 @@ await Kernel.init(await Application.init(), {
 | >< | \/ | _|  | \_| |_| | 
 |_||_|\__/|_|    \__/___|_|`,
   baseCommands: [CustomizeCommand, ThemesCommand],
-  packages: [{ name: '@hallofame/cli', version, base: true }, '@h3ravel/musket', 'arkormx'],
+  packages: [
+    { name: '@hallofame/cli', version, alias: 'HOF CLI', base: true },
+    '@h3ravel/musket',
+    'arkormx'
+  ],
   versionFormatter(pkgs, meta) {
     return pkgs
       .filter((e) => e.name !== 'Unknown')
