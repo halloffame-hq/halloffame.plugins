@@ -73,3 +73,27 @@ targets are written, existing translations for other keys and locales are left u
 untranslated entry simply falls back to English at runtime. Writes match each catalogue's formatting
 (the API module's Prettier wrapping and the locale files' newline convention), so an unedited
 round-trip produces no diff.
+
+### `hof deploy` - Generate deployment resources
+
+Template Docker, nginx, Apache, and pm2 configuration from your project's environment. Like
+`localize`, it finds the paired project automatically and runs from either root.
+
+The first argument selects which deployment paths to generate. It accepts `all` or any combination of
+`docker`, `nginx`, `apache`, and `pm2` (space or comma separated); omit it to be prompted with a
+multi-select.
+
+```sh
+hof deploy all --out deploy        # every target; prompts for domains, port, node, package manager
+hof deploy nginx pm2 --out deploy  # only the bare-metal reverse proxy and process manager
+hof deploy docker --yes            # only Docker, accepting env-derived defaults without prompting
+```
+
+Only the files for the selected targets are written, and prompts are limited to the settings those
+targets need. Docker build files (`Dockerfile.api`, `Dockerfile.web`, `.dockerignore`,
+`nginx.web.conf`) are written to each project root, since that is their build context; the
+orchestration files (`docker-compose.yml`, `nginx.conf`, `.htaccess`, `pm2.ecosystem.config.cjs`,
+`README.md`) go to the output directory. The compose file wires Postgres, Redis, the API, one worker
+per queue, and the nginx-served client; the generated `README.md` covers only the selected paths. The
+host `nginx.conf` routes hall tenant subdomains (`*.<root domain>`). Existing files are never
+overwritten unless you pass `--force`.

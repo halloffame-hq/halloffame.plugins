@@ -45,8 +45,8 @@ importers:
   packages/cli:
     dependencies:
       '@h3ravel/musket':
-        specifier: ^2.2.13
-        version: 2.2.13(@types/node@25.9.5)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3))
+        specifier: ^2.2.14
+        version: 2.2.14(@types/node@25.9.5)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3))
       '@h3ravel/shared':
         specifier: ^2.2.6
         version: 2.2.6(@types/node@25.9.5)
@@ -327,8 +327,8 @@ packages:
   '@h3ravel/contracts@2.2.6':
     resolution: {integrity: sha512-GDljn+3qswJkhujfy5O7g6Cx4nbUXzwgYjsInQ5afLthhGNrQqOyCWIWQNzM4afquEWZ/0BV22J1gfGKZgN9Vw==}
 
-  '@h3ravel/musket@2.2.13':
-    resolution: {integrity: sha512-3md3Ncmjh9HDAYMq0gseJyZWyZpmX5hZMAx2Uu3SAhpP99Hwg154UkVygAvXMQN9Ks7zkXEpaj+/q2Ky2TlhzQ==}
+  '@h3ravel/musket@2.2.14':
+    resolution: {integrity: sha512-OGXlh3L8c/MViCKWCx/pLmyiTggHeeHmh7R8A1l/fqcixnzTvyRWduW3K1qmtzjwbh53nZH8b64/Y9QJVORcgg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       tsdown: ^0.22.2
@@ -2622,7 +2622,7 @@ snapshots:
     transitivePeerDependencies:
       - crossws
 
-  '@h3ravel/musket@2.2.13(@types/node@25.9.5)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3))':
+  '@h3ravel/musket@2.2.14(@types/node@25.9.5)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3))':
     dependencies:
       '@h3ravel/shared': 2.2.6(@types/node@25.9.5)
       chalk: 5.6.2
@@ -3283,7 +3283,7 @@ snapshots:
   arkormx@2.12.7(@types/node@25.9.5)(h3@2.0.1-rc.26)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3)):
     dependencies:
       '@h3ravel/collect.js': 5.4.0
-      '@h3ravel/musket': 2.2.13(@types/node@25.9.5)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3))
+      '@h3ravel/musket': 2.2.14(@types/node@25.9.5)(tsdown@0.22.14(tsx@4.23.1)(typescript@6.0.3))
       '@h3ravel/shared': 2.2.6(@types/node@25.9.5)
       '@h3ravel/support': 2.2.6(@types/node@25.9.5)(h3@2.0.1-rc.26)
       dotenv: 17.4.2
