@@ -14,8 +14,6 @@ await Kernel.init(await Application.init(), {
   baseCommands: [CustomizeCommand, ThemesCommand],
   packages: [
     { name: '@hallofame/cli', version, alias: 'HOF CLI', base: true },
-    '@h3ravel/musket',
-    'arkormx'
   ],
   versionFormatter(pkgs, meta) {
     return pkgs
