@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/cli",
-  "version": "0.1.18",
+  "version": "0.1.21",
   "description": "Local CLI for Hall of Fame projects",
   "type": "module",
   "license": "MIT",
@@ -22,10 +22,11 @@
   "scripts": {
     "build": "tsdown",
     "check": "tsc --noEmit && vitest run && tsdown",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prePublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@h3ravel/musket": "^2.2.11",
+    "@h3ravel/musket": "^2.2.12",
     "@h3ravel/shared": "^2.2.6",
     "arkormx": "^2.12.7",
     "dotenv": "^17.3.1",
