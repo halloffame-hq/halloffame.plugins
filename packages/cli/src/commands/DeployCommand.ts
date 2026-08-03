@@ -37,14 +37,37 @@ export class DeployCommand extends Command<Application> {
           'Targets to generate: all, docker, nginx, apache, pm2 (space or comma separated)',
         required: false,
         multiple: true,
+        choices: ['all', 'docker', 'nginx', 'apache', 'pm2'],
       })
-      .option('out', { description: 'Output directory', requiresValue: true })
-      .option('domain', { description: 'Root domain, e.g. example.com', requiresValue: true })
-      .option('web-domain', { description: 'Client app host', requiresValue: true })
-      .option('api-domain', { description: 'API host', requiresValue: true })
-      .option('port', { description: 'API port', requiresValue: true })
-      .option('node', { description: 'Node major version', requiresValue: true })
-      .option('pm', { description: 'Package manager (pnpm, npm, yarn)', requiresValue: true })
+      .option('out', {
+        description: 'Output directory',
+        requiresValue: true,
+      })
+      .option('domain', {
+        description: 'Root domain, e.g. example.com',
+        requiresValue: true,
+      })
+      .option('web-domain', {
+        description: 'Client app host',
+        requiresValue: true,
+      })
+      .option('api-domain', {
+        description: 'API host',
+        requiresValue: true,
+      })
+      .option('port', {
+        description: 'API port',
+        requiresValue: true,
+      })
+      .option('node', {
+        description: 'Node major version',
+        requiresValue: true,
+      })
+      .option('pm', {
+        description: 'Package manager (pnpm, npm, yarn)',
+        requiresValue: true,
+        choices: ['pnpm', 'npm', 'yarn'],
+      })
       .option('api-root', {
         description: 'Path to the Hall of Fame API project',
         requiresValue: true,
@@ -53,9 +76,16 @@ export class DeployCommand extends Command<Application> {
         description: 'Path to the Hall of Fame app project',
         requiresValue: true,
       })
-      .option('skip-redis', { description: 'Exclude Redis from the compose file' })
-      .option('force', { description: 'Overwrite existing files' })
-      .option('yes', { short: 'y', description: 'Accept defaults without prompting' })
+      .option('skip-redis', {
+        description: 'Exclude Redis from the compose file',
+      })
+      .option('force', {
+        description: 'Overwrite existing files',
+      })
+      .option('yes', {
+        short: 'y',
+        description: 'Accept defaults without prompting',
+      })
   }
 
   async handle(): Promise<void> {
