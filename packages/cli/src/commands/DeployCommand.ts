@@ -33,7 +33,8 @@ export class DeployCommand extends Command<Application> {
       .command('deploy')
       .describe('Generate Docker, nginx, Apache, and pm2 deployment resources')
       .argument('environment', {
-        description: 'Targets to generate: all, docker, nginx, apache, pm2 (space or comma separated)',
+        description:
+          'Targets to generate: all, docker, nginx, apache, pm2 (space or comma separated)',
         required: false,
         multiple: true,
       })
@@ -76,7 +77,7 @@ export class DeployCommand extends Command<Application> {
 
     const outDir = path.resolve(
       (this.option('out') as string) ||
-      (yes ? 'deploy' : await this.ask('Output directory', 'deploy')),
+        (yes ? 'deploy' : await this.ask('Output directory', 'deploy')),
     )
 
     // Only the nginx host config needs the public domains.
