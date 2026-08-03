@@ -18,7 +18,7 @@ import type { SignatureBuilder } from '@h3ravel/musket'
 import path from 'node:path'
 import { resolveProjectPair } from '../localization/pairing'
 
-const NODE_VERSIONS = ['22', '20', '24']
+const NODE_VERSIONS = ['22', '24', '25']
 const PACKAGE_MANAGERS: PackageManager[] = ['pnpm', 'npm', 'yarn']
 const TARGET_CHOICES = [
   { name: 'Docker (compose + images)', value: 'docker' },
@@ -107,7 +107,7 @@ export class DeployCommand extends Command<Application> {
 
     const outDir = path.resolve(
       (this.option('out') as string) ||
-        (yes ? 'deploy' : await this.ask('Output directory', 'deploy')),
+      (yes ? 'deploy' : await this.ask('Output directory', 'deploy')),
     )
 
     // Only the nginx host config needs the public domains.
