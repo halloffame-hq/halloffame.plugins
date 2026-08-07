@@ -14,15 +14,30 @@ const sameSignature = (expected: string, received: string): boolean => {
   return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(received, 'hex'))
 }
 
+/**
+ * Whether a body really came from Paystack.
+ *
+ * Its own export because the payout webhooks need the same check: a transfer
+ * outcome that is not authenticated is a stranger telling us money arrived.
+ */
+export function verifyPaystackSignature(
+  secretKey: string,
+  rawBody: string,
+  headers: Record<string, string | undefined>,
+): boolean {
+  const received = header(headers, 'x-paystack-signature')
+  if (!received) return false
+  const expected = createHmac('sha512', secretKey).update(rawBody).digest('hex')
+
+  return sameSignature(expected, received)
+}
+
 export function parsePaystackWebhook(
   secretKey: string,
   rawBody: string,
   headers: Record<string, string | undefined>,
 ): WebhookResult | null {
-  const received = header(headers, 'x-paystack-signature')
-  if (!received) return null
-  const expected = createHmac('sha512', secretKey).update(rawBody).digest('hex')
-  if (!sameSignature(expected, received)) return null
+  if (!verifyPaystackSignature(secretKey, rawBody, headers)) return null
 
   const payload = JSON.parse(rawBody) as {
     event?: string
