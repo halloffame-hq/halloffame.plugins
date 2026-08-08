@@ -1,9 +1,5 @@
 import type { PaymentProvider, PaystackClient, PaystackProviderOptions } from './types'
-import type {
-  PaystackPayoutClient,
-  PaystackPayoutOptions,
-  PayoutProvider,
-} from './payout-types'
+import type { PaystackPayoutClient, PaystackPayoutOptions, PayoutProvider } from './payout-types'
 
 import { Paystack } from 'paystack-sdk'
 import { PaystackPayoutProvider } from './PaystackPayoutProvider'
@@ -41,8 +37,7 @@ export function createPayoutProvider(options: PaystackPayoutOptions = {}): Payou
     options.secretKey ?? process.env.PAYSTACK_SECRET_KEY,
     'PAYSTACK_SECRET_KEY',
   )
-  const client =
-    options.client ?? (new Paystack(secretKey) as unknown as PaystackPayoutClient)
+  const client = options.client ?? (new Paystack(secretKey) as unknown as PaystackPayoutClient)
 
   return new PaystackPayoutProvider(client, secretKey, options.recipientType)
 }

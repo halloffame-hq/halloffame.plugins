@@ -107,7 +107,7 @@ export class DeployCommand extends Command<Application> {
 
     const outDir = path.resolve(
       (this.option('out') as string) ||
-      (yes ? 'deploy' : await this.ask('Output directory', 'deploy')),
+        (yes ? 'deploy' : await this.ask('Output directory', 'deploy')),
     )
 
     // Only the nginx host config needs the public domains.

@@ -96,9 +96,7 @@ describe('Paystack payout provider', () => {
 
       await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('bank_code', 'GHS')
 
-      expect(sdk.misc.banks).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: 'GHS' }),
-      )
+      expect(sdk.misc.banks).toHaveBeenCalledWith(expect.objectContaining({ currency: 'GHS' }))
     })
 
     it('has nothing to offer for any other field', async () => {
@@ -114,9 +112,7 @@ describe('Paystack payout provider', () => {
       const sdk = client()
       sdk.misc.banks.mockResolvedValue({ status: false, message: 'nope', data: null })
 
-      expect(
-        await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('bank_code'),
-      ).toEqual([])
+      expect(await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('bank_code')).toEqual([])
     })
   })
 
