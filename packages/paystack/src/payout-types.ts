@@ -7,11 +7,19 @@
 
 export type PayoutRecipientStatus = 'pending' | 'verified' | 'rejected'
 
+export interface PayoutFieldOption {
+  value: string
+  label: string
+}
+
 export interface PayoutRecipientField {
   key: string
   label: string
   help?: string
   required: boolean
+  /** That the provider supplies this field's values, such as its banks. */
+  optionsFromProvider?: boolean
+  options?: PayoutFieldOption[]
 }
 
 export interface PayoutRecipientInput {
@@ -69,6 +77,7 @@ export interface PayoutProvider {
   recipientStatus(recipientId: string): Promise<PayoutRecipientStatus>
   transfer(input: PayoutTransferInput): Promise<PayoutTransferResult>
   transferStatus?(transferId: string): Promise<PayoutTransferResult>
+  fieldOptions?(key: string, currency?: string): Promise<PayoutFieldOption[]>
   parseWebhook(
     rawBody: string,
     headers: Record<string, string | undefined>,
@@ -93,7 +102,21 @@ export interface PaystackTransferData {
   failures?: unknown
 }
 
+export interface PaystackBank {
+  name: string
+  code: string
+  currency?: string
+  active?: boolean
+}
+
 export interface PaystackPayoutClient {
+  misc?: {
+    banks(query?: Record<string, unknown>): Promise<{
+      status: boolean
+      message: string
+      data?: PaystackBank[] | null
+    }>
+  }
   recipient: {
     create(data: Record<string, unknown>): Promise<{
       status: boolean

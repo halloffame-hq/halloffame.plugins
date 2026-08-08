@@ -2,6 +2,7 @@ import type {
   PaystackPayoutClient,
   PayoutProvider,
   PayoutRecipientInput,
+  PayoutFieldOption,
   PayoutRecipientResult,
   PayoutRecipientStatus,
   PayoutTransferInput,
@@ -40,9 +41,13 @@ export class PaystackPayoutProvider implements PayoutProvider {
     },
     {
       key: 'bank_code',
-      label: 'Bank code',
-      help: "Paystack's code for the bank, from its list of banks.",
+      label: 'Bank',
+      help: 'The bank the account is held at.',
       required: true,
+      // Paystack owns this list, it is long, and it changes without warning.
+      // A code typed by hand is a transfer that fails at the bank rather than
+      // at the form.
+      optionsFromProvider: true,
     },
   ]
 
@@ -72,6 +77,26 @@ export class PaystackPayoutProvider implements PayoutProvider {
       bankName: response.data.details?.bank_name ?? null,
       last4: response.data.details?.account_number?.slice(-4) ?? null,
     }
+  }
+
+  /**
+   * The banks Paystack will pay into, for the currency being paid in.
+   *
+   * Sorted by name because the API returns them in its own order, and a few
+   * hundred banks in no particular order is a list nobody can use. Inactive
+   * ones are dropped: offering a bank that will refuse the transfer is worse
+   * than not offering it.
+   */
+  async fieldOptions(key: string, currency = 'NGN'): Promise<PayoutFieldOption[]> {
+    if (key !== 'bank_code' || !this.client.misc) return []
+
+    const response = await this.client.misc.banks({ currency, perPage: 100 })
+    if (!response.status || !response.data) return []
+
+    return response.data
+      .filter((bank) => bank.active !== false)
+      .map((bank) => ({ value: bank.code, label: bank.name }))
+      .sort((left, right) => left.label.localeCompare(right.label))
   }
 
   async recipientStatus(recipientId: string): Promise<PayoutRecipientStatus> {

@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createPayoutProvider, PaystackPayoutProvider } from '../src/index.js'
 
 const client = () => ({
+  misc: {
+    banks: vi.fn(),
+  },
   recipient: {
     create: vi.fn(),
     fetch: vi.fn(),
@@ -62,6 +65,59 @@ describe('Paystack payout provider', () => {
       last4: '6789',
     })
     expect(result.onboardingUrl).toBeUndefined()
+  })
+
+  describe('the bank list', () => {
+    it('offers active banks, named and in order', async () => {
+      const sdk = client()
+      sdk.misc.banks.mockResolvedValue({
+        status: true,
+        message: 'ok',
+        data: [
+          { name: 'Zenith Bank', code: '057', active: true },
+          { name: 'Access Bank', code: '044', active: true },
+          { name: 'Defunct Bank', code: '000', active: false },
+        ],
+      })
+
+      const options = await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('bank_code')
+
+      // Sorted, because a few hundred banks in the API's own order is a list
+      // nobody can use, and inactive ones would refuse the transfer anyway.
+      expect(options).toEqual([
+        { value: '044', label: 'Access Bank' },
+        { value: '057', label: 'Zenith Bank' },
+      ])
+    })
+
+    it('asks for the currency being paid in', async () => {
+      const sdk = client()
+      sdk.misc.banks.mockResolvedValue({ status: true, message: 'ok', data: [] })
+
+      await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('bank_code', 'GHS')
+
+      expect(sdk.misc.banks).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'GHS' }),
+      )
+    })
+
+    it('has nothing to offer for any other field', async () => {
+      const sdk = client()
+
+      expect(
+        await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('account_number'),
+      ).toEqual([])
+      expect(sdk.misc.banks).not.toHaveBeenCalled()
+    })
+
+    it('returns nothing rather than throwing when Paystack refuses', async () => {
+      const sdk = client()
+      sdk.misc.banks.mockResolvedValue({ status: false, message: 'nope', data: null })
+
+      expect(
+        await new PaystackPayoutProvider(sdk, 'secret').fieldOptions('bank_code'),
+      ).toEqual([])
+    })
   })
 
   it('describes the fields it needs, so a client can render them', () => {

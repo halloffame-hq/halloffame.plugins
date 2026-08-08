@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/payment-provider-paystack",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Paystack payment provider for Hall Of Fame",
   "type": "module",
   "license": "MIT",
@@ -23,7 +23,8 @@
   "scripts": {
     "build": "tsdown",
     "check": "tsc --noEmit && vitest run && tsdown",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@paystack/inline-js": "^2.24.0",
