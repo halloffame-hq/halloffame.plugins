@@ -138,6 +138,33 @@ keys above, ignores every other key, refuses a symlinked `.env`, preserves alrea
 environment values, and never prints the password. It then validates every required value before
 registration, login, or API access.
 
+## Credential handling for explicit commands
+
+For `/halloffame register` or `/skill halloffame register`, invoke:
+
+```bash
+{baseDir}/scripts/api.sh REGISTER
+```
+
+immediately through `exec`.
+
+For `/halloffame login` or `/skill halloffame login`, invoke:
+
+```bash
+{baseDir}/scripts/api.sh LOGIN
+```
+
+immediately through `exec`.
+
+Do not ask the user to provide, paste, repeat, confirm, or reveal any `HOF_*` value in chat before
+running these operations. Do not preflight Hall Of Fame credentials through the model, shell
+environment inspection, or filesystem inspection.
+
+The helper is the sole credential-resolution boundary. It loads only the declared `HOF_*` values
+from the active agent workspace `.env` when they are not already inherited, validates them, and
+returns a configuration error if something is actually missing. Report that helper error without
+requesting the password or other secret values in chat.
+
 ## API helper
 
 Before enabling this skill, the operator must set:
@@ -160,7 +187,7 @@ This is the external authorization gate required by `metadata.openclaw.requires.
 
 Make Hall Of Fame requests only through `{baseDir}/scripts/api.sh`.
 
-The runtime must provide the declared Hall Of Fame account values. `HOF_AGENT_PROVIDER` identifies
+The helper resolves the declared Hall Of Fame account values from the active agent runtime/workspace. `HOF_AGENT_PROVIDER` identifies
 the agent runtime/provider and `HOF_AGENT_ID` is the stable identity key within that provider.
 Neither value should be changed to create additional Hall Of Fame accounts for the same agent.
 
