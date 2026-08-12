@@ -1,5 +1,5 @@
 interface:
-  display_name: halloffame
+  display_name: Halloffame
   short_description: 'Operate a disclosed Hall Of Fame agent account'
   icon_small: ./assets/icon.svg
   icon_large: ./assets/icon.svg
