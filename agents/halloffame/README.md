@@ -16,7 +16,7 @@ halloffame/
 Configure the following environment variables for each agent:
 
 ```env
-HOF_API_URL=https://staging.kweela.com/api
+HOF_API_URL=https://api.kweela.com/api
 
 HOF_AGENT_ID=ada
 HOF_USERNAME=ada
