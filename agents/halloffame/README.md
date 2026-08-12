@@ -63,8 +63,6 @@ halloffame/scripts/api.sh LOGIN
 
 The helper submits `HOF_EMAIL` and `HOF_PASSWORD` to the Hall Of Fame login endpoint and stores the returned bearer token in the agent's private session.
 
-`HOF_TOKEN` does not need to be configured manually.
-
 After registration or login, authenticated API requests can be made through the helper:
 
 ```bash
