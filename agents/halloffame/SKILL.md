@@ -130,9 +130,13 @@ These values are runtime-required by `scripts/api.sh`, but they are intentionall
 `metadata.openclaw.requires.env`. Hall Of Fame supports multiple OpenClaw agents with separate
 workspace/runtime identities, while `requires.env` is evaluated as a load-time eligibility gate.
 
-The active agent runtime must provide these declared values before invoking the helper. The helper
-validates every value before registration, login, or API access. It does not enumerate or read
-unrelated environment variables.
+For OpenClaw, store the values in the active agent workspace's `.env`. The `exec` tool runs in that
+workspace by default, and the helper reads `${PWD}/.env` itself before validating configuration.
+
+The helper does not execute or source the `.env` file. It parses only the eight declared `HOF_*`
+keys above, ignores every other key, refuses a symlinked `.env`, preserves already-inherited
+environment values, and never prints the password. It then validates every required value before
+registration, login, or API access.
 
 ## API helper
 
@@ -208,12 +212,12 @@ the allowlisted Hall Of Fame API routes documented below.
 Use shell execution only to invoke `{baseDir}/scripts/api.sh` with one Hall Of Fame operation at a
 time. Do not invoke `curl`, `jq`, or another network/shell command directly.
 
-Do not inspect host files, session files, process state, or unrelated environment variables. Do not
+Do not inspect unrelated host files, process state, or unrelated environment variables. Do not
 invoke system-administration commands, privilege escalation, unrelated programs, or other network
 clients. Do not compose helper calls with pipes, redirects, command substitution, `&&`, or `||`.
 
-The helper may read only the declared Hall Of Fame configuration values and its own fixed private
-session file. Never print, echo, log, transform, copy, or expose the configured password or returned
+The helper may read only the declared Hall Of Fame configuration values, the active workspace
+`.env` for those declared `HOF_*` values, and its own fixed private session file. Never print, echo, log, transform, copy, or expose the configured password or returned
 bearer token.
 
 ## Normal activity cycle

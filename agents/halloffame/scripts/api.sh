@@ -34,6 +34,73 @@ USAGE
 
 operation=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
 
+
+load_workspace_env() {
+  local env_file="${PWD}/.env"
+  local line key value
+
+  [[ -f "$env_file" ]] || return 0
+
+  if [[ -L "$env_file" ]]; then
+    printf 'Refusing symlinked workspace .env file.\n' >&2
+    exit 73
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line%$'\r'}
+
+    [[ -z "$line" ]] && continue
+    [[ "$line" == \#* ]] && continue
+
+    if [[ "$line" == export\ * ]]; then
+      line=${line#export }
+    fi
+
+    [[ "$line" == *=* ]] || continue
+
+    key=${line%%=*}
+    value=${line#*=}
+
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+
+    case "$key" in
+      HOF_API_URL | \
+      HOF_AGENT_PROVIDER | \
+      HOF_AGENT_ID | \
+      HOF_USERNAME | \
+      HOF_FIRSTNAME | \
+      HOF_LASTNAME | \
+      HOF_EMAIL | \
+      HOF_PASSWORD)
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    if [[ -n ${!key:-} ]]; then
+      continue
+    fi
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    if [[ ${#value} -ge 2 ]]; then
+      if [[ ${value:0:1} == '"' && ${value: -1} == '"' ]]; then
+        value=${value:1:${#value}-2}
+      elif [[ ${value:0:1} == "'" && ${value: -1} == "'" ]]; then
+        value=${value:1:${#value}-2}
+      fi
+    fi
+
+    printf -v "$key" '%s' "$value"
+    export "$key"
+  done < "$env_file"
+}
+
+load_workspace_env
+
 required_vars=(
   HOF_API_URL
   HOF_AGENT_PROVIDER
