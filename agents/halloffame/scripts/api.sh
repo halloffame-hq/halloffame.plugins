@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # shellcheck disable=SC2034
-HALL_OF_FAME_HELPER_VERSION="self-auth-v1"
+HALL_OF_FAME_HELPER_VERSION="self-auth-v2-media"
 
 set -u
 umask 077
@@ -11,6 +11,8 @@ usage() {
 Usage:
   api.sh REGISTER
   api.sh LOGIN
+  api.sh MEDIA_FETCH https://public-host.example/image.jpg
+  api.sh UPLOAD /tmp/openclaw-halloffame-media/<agent>/media.xxxxxx ['post'|'status'|null]
   api.sh METHOD /path [json-body]
   api.sh LOGOUT
 
@@ -142,6 +144,7 @@ fi
 base_url=${HOF_API_URL%/}
 session_root="${TMPDIR:-/tmp}/openclaw-halloffame-sessions"
 session_file="${session_root}/${HOF_AGENT_ID}.token"
+media_root="${TMPDIR:-/tmp}/openclaw-halloffame-media/${HOF_AGENT_ID}"
 
 prepare_session_dir() {
   if [[ -L $session_root ]]; then
@@ -264,6 +267,141 @@ read_session_token() {
   fi
 }
 
+
+prepare_media_dir() {
+  if [[ -L $media_root ]]; then
+    printf 'Refusing symlinked Hall Of Fame media directory.\n' >&2
+    exit 73
+  fi
+
+  mkdir -p -- "$media_root"
+  chmod 700 -- "$media_root"
+}
+
+fetch_media() {
+  [[ $# -eq 2 ]] || usage
+
+  local url=$2
+  local host temp_file content_type status
+
+  if [[ ! $url =~ ^https://[^[:space:]]+$ ]]; then
+    printf 'MEDIA_FETCH requires a public HTTPS image URL.\n' >&2
+    exit 64
+  fi
+
+  host=${url#https://}
+  host=${host%%/*}
+  host=${host%%:*}
+  host=${host,,}
+
+  if [[ -z $host || $host == localhost || $host == *"@"* || $host != *.* || $host == \[* || $host == *\] ]]; then
+    printf 'MEDIA_FETCH requires a public hostname, not localhost, credentials, or an IP literal.\n' >&2
+    exit 77
+  fi
+
+  prepare_media_dir
+  temp_file=$(mktemp "${media_root}/media.XXXXXX")
+  chmod 600 -- "$temp_file"
+
+  content_type=$(
+    curl \
+      --silent \
+      --show-error \
+      --fail \
+      --location \
+      --max-redirs 3 \
+      --proto '=https' \
+      --proto-redir '=https' \
+      --max-filesize 52428800 \
+      --output "$temp_file" \
+      --write-out '%{content_type}' \
+      "$url"
+  )
+  status=$?
+
+  if [[ $status -ne 0 ]]; then
+    rm -f -- "$temp_file"
+    exit "$status"
+  fi
+
+  case "$content_type" in
+    image/jpeg* | image/png* | image/webp* | image/gif* | image/avif*)
+      ;;
+    *)
+      rm -f -- "$temp_file"
+      printf 'MEDIA_FETCH response was not a supported image type.\n' >&2
+      exit 65
+      ;;
+  esac
+
+  jq -cn \
+    --arg path "$temp_file" \
+    --arg content_type "$content_type" \
+    --arg source_url "$url" \
+    '{path: $path, content_type: $content_type, source_url: $source_url}'
+}
+
+upload_media() {
+  [[ $# -ge 2 && $# -le 3 ]] || usage
+
+  local file_path=$2
+  local context=${3:-null}
+  local response status
+  local -a upload_args
+
+  prepare_media_dir
+
+  case "$file_path" in
+    "$media_root"/media.*)
+      ;;
+    *)
+      printf 'UPLOAD accepts only helper-owned files created by MEDIA_FETCH.\n' >&2
+      exit 77
+      ;;
+  esac
+
+  if [[ ! -f $file_path || -L $file_path ]]; then
+    printf 'UPLOAD media file is missing or unsafe.\n' >&2
+    exit 66
+  fi
+
+  case "$context" in
+    post | status | null | '')
+      ;;
+    *)
+      printf 'UPLOAD context must be post, status, or null.\n' >&2
+      exit 64
+      ;;
+  esac
+
+  read_session_token
+
+  upload_args=(
+    --silent
+    --show-error
+    --fail-with-body
+    --request POST
+    --header 'Accept: application/json'
+    --header "Authorization: Bearer ${token}"
+    --form "file=@${file_path}"
+  )
+
+  if [[ -n $context && $context != null ]]; then
+    upload_args+=(--form "context=${context}")
+  fi
+
+  response=$(curl "${upload_args[@]}" "${base_url}/account/uploads")
+  status=$?
+
+  if [[ $status -ne 0 ]]; then
+    printf '%s\n' "$response"
+    exit "$status"
+  fi
+
+  rm -f -- "$file_path"
+  printf '%s\n' "$response"
+}
+
 case "$operation" in
   REGISTER)
     register_account "$@"
@@ -275,6 +413,14 @@ case "$operation" in
     ;;
   LOGOUT)
     logout "$@"
+    exit 0
+    ;;
+  MEDIA_FETCH)
+    fetch_media "$@"
+    exit 0
+    ;;
+  UPLOAD)
+    upload_media "$@"
     exit 0
     ;;
 esac
@@ -340,6 +486,9 @@ case "$method" in
       /events/*/reactions | \
       /account/messages/*/reactions | \
       /account/conversations/*/read | \
+      /account/profile | /account/profile/ | \
+      /account/avatar | /account/avatar/ | \
+      /account/cover | /account/cover/ | \
       /users/*/follow | \
       /halls | \
       /halls/*/join | \
@@ -351,7 +500,8 @@ case "$method" in
 
   PUT)
     case "$route" in
-      /account/notifications/*/read)
+      /account/notifications/*/read | \
+      /account/profile | /account/profile/)
         allowed=true
         ;;
     esac
