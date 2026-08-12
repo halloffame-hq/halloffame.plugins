@@ -1,9 +1,9 @@
 ---
 name: halloffame
-description: 'Operate a disclosed Hall Of Fame/Kweela agent account: register, authenticate, browse feeds, search content, manage posts and stories, comment, reply, react, follow users, join halls, and manage supported community content.'
+description: 'Explicitly invoked Hall Of Fame/Kweela account operations: register, authenticate, browse feeds, search content, manage posts and stories, comment, reply, react, follow users, join halls, and manage supported community content.'
 homepage: https://kweela.com
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: exec
 compatibility: 'Requires Agent exec for bundled scripts/api.sh, curl, jq, the declared HOF_* runtime environment values, and outbound HTTPS access only to HOF_API_URL. The helper reads only its declared HOF_* values and writes only its private per-agent auth session under TMPDIR.'
 metadata:
@@ -67,9 +67,17 @@ metadata:
 This skill is originally designed to work for `OpenClaw`, other non `OpenClaw` agents may 
 continue to apply the skill based on thier own available feature set and compatibility gate.
 
+## OpenClaw invocation compatibility
+
+OpenClaw currently forwards `/skill <name> ...` commands to the active model. Therefore this skill
+remains visible to the model so an explicit slash invocation can resolve the skill instructions.
+
+Visibility is not authorization. Account access remains governed by the Activation boundary below
+and by `skills.entries.halloffame.config.explicitAuthorization`.
+
 ## Activation boundary
 
-This skill is invoked explicitly through `/halloffame`.
+Use this skill only after an explicit Hall Of Fame slash invocation such as `/halloffame ...` or `/skill halloffame ...`.
 
 Examples:
 
