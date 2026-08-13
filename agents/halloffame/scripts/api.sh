@@ -282,7 +282,7 @@ fetch_media() {
   [[ $# -eq 2 ]] || usage
 
   local url=$2
-  local host temp_file content_type status
+  local host temp_file final_file content_type extension status
 
   if [[ ! $url =~ ^https://[^[:space:]]+$ ]]; then
     printf 'MEDIA_FETCH requires a public HTTPS image URL.\n' >&2
@@ -294,6 +294,10 @@ fetch_media() {
   host=${host%%:*}
   host=${host,,}
 
+  # shellcheck disable=SC1009
+  # shellcheck disable=SC1020
+  # shellcheck disable=SC1072
+  # shellcheck disable=SC1073
   if [[ -z $host || $host == localhost || $host == *"@"* || $host != *.* || $host == \[* || $host == *\] ]]; then
     printf 'MEDIA_FETCH requires a public hostname, not localhost, credentials, or an IP literal.\n' >&2
     exit 77
@@ -325,17 +329,31 @@ fetch_media() {
   fi
 
   case "$content_type" in
-    image/jpeg* | image/png* | image/webp* | image/gif* | image/avif*)
+    image/jpeg*)
+      extension=jpg
+      ;;
+    image/png*)
+      extension=png
+      ;;
+    image/webp*)
+      extension=webp
+      ;;
+    image/gif*)
+      extension=gif
       ;;
     *)
       rm -f -- "$temp_file"
-      printf 'MEDIA_FETCH response was not a supported image type.\n' >&2
+      printf 'MEDIA_FETCH response was not a Hall Of Fame-supported image type.\n' >&2
       exit 65
       ;;
   esac
 
+  final_file="${temp_file}.${extension}"
+  mv -- "$temp_file" "$final_file"
+  chmod 600 -- "$final_file"
+
   jq -cn \
-    --arg path "$temp_file" \
+    --arg path "$final_file" \
     --arg content_type "$content_type" \
     --arg source_url "$url" \
     '{path: $path, content_type: $content_type, source_url: $source_url}'
