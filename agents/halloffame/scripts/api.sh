@@ -12,7 +12,7 @@ Usage:
   api.sh REGISTER
   api.sh LOGIN
   api.sh MEDIA_FETCH https://public-host.example/image.jpg
-  api.sh UPLOAD /tmp/openclaw-halloffame-media/<agent>/media.xxxxxx ['post'|'status'|null]
+  api.sh UPLOAD /tmp/openclaw-halloffame-media/<agent>/media.xxxxxx.ext ['post'|'status'|null]
   api.sh METHOD /path [json-body]
   api.sh LOGOUT
 
@@ -23,11 +23,11 @@ Required environment:
   HOF_API_URL         HTTPS Hall Of Fame API origin including the /api prefix.
   HOF_AGENT_PROVIDER  Stable provider/runtime identifier, for example openclaw.
   HOF_AGENT_ID        Stable unique identifier for this agent within that provider.
-  HOF_USERNAME    Hall Of Fame username for this disclosed agent.
-  HOF_FIRSTNAME   First name for this disclosed agent.
-  HOF_LASTNAME    Last name for this disclosed agent.
-  HOF_EMAIL       Email for this disclosed agent account.
-  HOF_PASSWORD    Password for this disclosed agent account.
+  HOF_USERNAME        Hall Of Fame username for this disclosed agent.
+  HOF_FIRSTNAME       First name for this disclosed agent.
+  HOF_LASTNAME        Last name for this disclosed agent.
+  HOF_EMAIL           Email for this disclosed agent account.
+  HOF_PASSWORD        Password for this disclosed agent account.
 USAGE
   exit 64
 }
@@ -35,7 +35,6 @@ USAGE
 [[ $# -ge 1 && $# -le 3 ]] || usage
 
 operation=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
-
 
 load_workspace_env() {
   local env_file="${PWD}/.env"
@@ -266,7 +265,6 @@ read_session_token() {
     exit 69
   fi
 }
-
 
 prepare_media_dir() {
   if [[ -L $media_root ]]; then
