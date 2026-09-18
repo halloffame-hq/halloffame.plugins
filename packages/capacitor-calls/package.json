@@ -39,6 +39,6 @@
     "vitest": "^4.1.10"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }
