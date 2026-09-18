@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/capacitor-calls",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native incoming-call support for Hall Of Fame reseller applications.",
   "type": "module",
   "main": "dist/esm/index.js",
