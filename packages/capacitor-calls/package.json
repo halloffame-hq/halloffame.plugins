@@ -1,0 +1,44 @@
+{
+  "name": "@hallofame/capacitor-calls",
+  "version": "0.1.0",
+  "description": "Native incoming-call support for Hall Of Fame reseller applications.",
+  "type": "module",
+  "main": "dist/esm/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js"
+    }
+  },
+  "files": [
+    "android/",
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit && pnpm build && vitest run",
+    "test": "vitest run",
+    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm build"
+  },
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0",
+    "@capacitor/push-notifications": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^8.5.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}

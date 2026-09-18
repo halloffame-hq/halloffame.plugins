@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hof_call_channel_name">Calls</string>
+    <string name="hof_call_channel_description">Ringing for incoming calls.</string>
+    <string name="hof_call_incoming_voice">Incoming call</string>
+    <string name="hof_call_incoming_video">Incoming video call</string>
+    <string name="hof_call_unknown_caller">Someone</string>
+    <string name="hof_call_answer">Answer</string>
+    <string name="hof_call_decline">Decline</string>
+</resources>
