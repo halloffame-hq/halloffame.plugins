@@ -12,6 +12,10 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
 
+        <receiver
+            android:name="toneflix.halloffame.capacitor.calls.CallActionReceiver"
+            android:exported="false" />
+
         <service
             android:name="toneflix.halloffame.capacitor.calls.CallConnectionService"
             android:exported="true"

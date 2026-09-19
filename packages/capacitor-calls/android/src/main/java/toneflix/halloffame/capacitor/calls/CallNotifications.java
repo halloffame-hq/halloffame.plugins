@@ -58,9 +58,12 @@ final class CallNotifications {
             TelecomCalls.incoming(context, callId, caller, video);
             return;
         }
-        post(context, callId, caller, video);
         if (Settings.canDrawOverlays(context)) {
             IncomingCallActivity.show(context, callId, caller, video);
+        } else {
+            // The notification is the fallback surface. Showing it as well as our
+            // activity gives the reader two sets of answer/decline controls.
+            post(context, callId, caller, video);
         }
         TelecomCalls.incoming(context, callId, caller, video);
     }
@@ -72,8 +75,8 @@ final class CallNotifications {
             ? context.getString(R.string.hof_call_unknown_caller) : name;
         PendingIntent ring = fullScreen(context, callId, caller, video);
         PendingIntent answer = open(context, callId, "answer");
-        PendingIntent decline = PendingIntent.getActivity(context, 1,
-            HostApplication.callAction(context, callId, "decline"),
+        PendingIntent decline = PendingIntent.getBroadcast(context, 1,
+            CallActionReceiver.decline(context, callId),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channel)

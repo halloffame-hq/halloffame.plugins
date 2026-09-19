@@ -91,7 +91,6 @@ public class IncomingCallActivity extends Activity {
     }
     private void decline(String id) {
         TelecomCalls.end(id, true);
-        startActivity(CallNotifications.callAction(this, id, "decline"));
         CallNotifications.stop(this); finish();
     }
     private void showOverKeyguard() {
