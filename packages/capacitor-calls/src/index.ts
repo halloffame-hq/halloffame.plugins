@@ -1,7 +1,8 @@
-import type { HallOfFameCallsPlugin } from './definitions.js'
+import type { HallOfFameCallsPlugin } from './definitions'
 import { registerPlugin } from '@capacitor/core'
 
-export * from './definitions.js'
+export * from './definitions'
 
-/** The single native bridge used by every Hall Of Fame reseller application. */
-export const HallOfFameCalls = registerPlugin<HallOfFameCallsPlugin>('HallOfFameCalls')
+export const HallOfFameCalls = registerPlugin<HallOfFameCallsPlugin>('HallOfFameCalls', {
+  web: () => import('./web').then((web) => new web.HallOfFameCallsWeb()),
+})

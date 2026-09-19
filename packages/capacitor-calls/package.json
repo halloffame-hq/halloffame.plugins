@@ -1,15 +1,15 @@
 {
   "name": "@hallofame/capacitor-calls",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Native incoming-call support for Hall Of Fame reseller applications.",
   "type": "module",
-  "main": "dist/esm/index.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/esm/index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/esm/index.d.ts",
-      "import": "./dist/esm/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     }
   },
   "files": [
@@ -18,10 +18,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit && pnpm build && vitest run",
+    "build": "tsdown",
+    "check": "tsc --noEmit && vitest run && tsdown",
     "test": "vitest run",
-    "prepare": "pnpm build",
     "prepublishOnly": "pnpm build"
   },
   "capacitor": {
@@ -36,7 +35,8 @@
   "devDependencies": {
     "@capacitor/core": "^8.5.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "tsdown": "^0.22.13"
   },
   "publishConfig": {
     "access": "public"

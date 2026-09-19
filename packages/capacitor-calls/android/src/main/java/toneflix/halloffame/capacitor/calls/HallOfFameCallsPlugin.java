@@ -22,6 +22,7 @@ public class HallOfFameCallsPlugin extends Plugin implements TelecomCalls.Listen
     @Override public void load() {
         TelecomCalls.listen(this);
         TelecomCalls.register(getContext());
+        HostApplication.watch(getContext());
     }
 
     @Override protected void handleOnDestroy() {
@@ -75,6 +76,12 @@ public class HallOfFameCallsPlugin extends Plugin implements TelecomCalls.Listen
         answer.put("held", id != null && !id.isEmpty() && TelecomCalls.outgoing(getContext(), id,
             call.getString("callee", ""), Boolean.TRUE.equals(call.getBoolean("video", false))));
         call.resolve(answer);
+    }
+
+    @PluginMethod public void ringOnSpeaker(PluginCall call) {
+        CallAudio.ringOnSpeaker(getContext(),
+            Boolean.TRUE.equals(call.getBoolean("active", false)));
+        call.resolve();
     }
 
     @PluginMethod public void active(PluginCall call) {

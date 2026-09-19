@@ -16,12 +16,22 @@ export interface NativeCallEvents {
   showIncoming: { callId: string; caller: string; video: boolean }
 }
 
+export interface IncomingCallOptions {
+  callId: string
+  caller: string
+  video: boolean
+  /** Notification copy. The application catalogues and translates it; Android uses resources. */
+  text?: { body?: string; answer?: string; decline?: string }
+}
+
 export interface HallOfFameCallsPlugin {
   canRingFullScreen(): Promise<FullScreenCallPermission>
   openFullScreenSettings(): Promise<void>
   openOverlaySettings(): Promise<void>
-  setRingtone(options: { tone: number }): Promise<{ tones: number }>
-  incoming(options: { callId: string; caller: string; video: boolean }): Promise<{ held: boolean }>
+  /** `src` is the browser's audio for that tone; Android plays its own packaged copy. */
+  setRingtone(options: { tone: number; src?: string }): Promise<{ tones: number }>
+  ringOnSpeaker(options: { active: boolean }): Promise<void>
+  incoming(options: IncomingCallOptions): Promise<{ held: boolean }>
   outgoing(options: { callId: string; callee: string; video: boolean }): Promise<{ held: boolean }>
   active(options: { callId: string }): Promise<void>
   end(options: { callId: string; rejected: boolean }): Promise<void>

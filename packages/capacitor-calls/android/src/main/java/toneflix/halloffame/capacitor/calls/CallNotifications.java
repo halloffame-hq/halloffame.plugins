@@ -30,6 +30,11 @@ final class CallNotifications {
     private static final String CHANNEL_ID = "halloffame.calls";
     private static final int NOTIFICATION_ID = 8801;
     private static final long DEFAULT_RING_MILLIS = 45_000L;
+    /** The API sends an ISO instant; another transport may carry a coarser one. */
+    private static final String[] ISO_8601 = {
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX", "yyyy-MM-dd'T'HH:mm:ssX"
+    };
     private static final Map<String, Long> expirations = new ConcurrentHashMap<>();
 
     private CallNotifications() {}
@@ -41,9 +46,15 @@ final class CallNotifications {
         if (callId.isEmpty()) return;
         String caller = call.optString("callerName", "");
         boolean video = "video".equals(call.optString("mediaMode", ""));
-        expirations.put(callId, expiry(call.optString("ringExpiresAt", "")));
+        long expiresAt = expiry(call.optString("ringExpiresAt", ""));
+        // A window that has already closed names a call nobody can answer.
+        if (expiresAt <= System.currentTimeMillis()) {
+            Log.w(TAG, "A call arrived after its ring had expired.");
+            return;
+        }
+        expirations.put(callId, expiresAt);
 
-        if (HostApplication.isForeground(context)) {
+        if (HostApplication.isForeground()) {
             TelecomCalls.incoming(context, callId, caller, video);
             return;
         }
@@ -87,7 +98,7 @@ final class CallNotifications {
     }
 
     static void post(Context context, String callId, String name, boolean video) {
-        if (HostApplication.isForeground(context)) return;
+        if (HostApplication.isForeground()) return;
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID,
                 build(context, callId, name, video));
@@ -130,12 +141,16 @@ final class CallNotifications {
     private static long remaining(String id) {
         return Math.max(1L, deadline(id) - System.currentTimeMillis());
     }
+    /** The instant the ring is over, never clamped forward. No expiry means the default window. */
     private static long expiry(String value) {
         if (value != null && !value.isEmpty()) {
-            try {
-                Date parsed = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.US).parse(value);
-                if (parsed != null) return Math.max(System.currentTimeMillis(), parsed.getTime());
-            } catch (Exception ignored) {}
+            for (String pattern : ISO_8601) {
+                try {
+                    Date parsed = new SimpleDateFormat(pattern, Locale.US).parse(value);
+                    if (parsed != null) return parsed.getTime();
+                } catch (Exception ignored) {}
+            }
+            Log.w(TAG, "A call named a ring expiry that could not be read.");
         }
         return System.currentTimeMillis() + DEFAULT_RING_MILLIS;
     }

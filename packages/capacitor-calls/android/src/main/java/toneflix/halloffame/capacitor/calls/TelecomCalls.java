@@ -22,11 +22,7 @@ final class TelecomCalls {
     static final String EXTRA_CALLER = "toneflix.halloffame.calls.CALLER";
     static final String EXTRA_VIDEO = "toneflix.halloffame.calls.VIDEO";
     private static final Map<String, CallConnection> live = new ConcurrentHashMap<>();
-    /*
-     * A call is offered to the platform once. The push that wakes a sleeping phone and the
-     * signal the web layer receives describe the same ring, and both arrive when the app is
-     * running, so without this the system would be given two calls with one id.
-     */
+    /** One offer per call: the push and the web layer's signal describe the same ring. */
     private static final Set<String> offered = ConcurrentHashMap.newKeySet();
     private static Listener listener;
 
