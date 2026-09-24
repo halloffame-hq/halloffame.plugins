@@ -98,6 +98,21 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@25.9.5)(jsdom@30.1.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
 
+  packages/ledger:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.9.5
+      tsdown:
+        specifier: ^0.22.13
+        version: 0.22.14(tsx@4.23.1)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@25.9.5)(jsdom@30.1.0)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
+
   packages/paystack:
     dependencies:
       '@paystack/inline-js':

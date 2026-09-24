@@ -1,0 +1,46 @@
+{
+  "name": "@kweela/ledger",
+  "version": "0.1.0",
+  "description": "A small, provider-neutral interface for storing and moving value, with embedded wallets and replay protection.",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./conformance": {
+      "types": "./dist/conformance.d.mts",
+      "import": "./dist/conformance.mjs"
+    }
+  },
+  "keywords": [
+    "ledger",
+    "wallet",
+    "balances",
+    "payments",
+    "settlement",
+    "conformance"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "check": "tsc --noEmit && vitest run && tsdown",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "tsdown": "^0.22.13",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
