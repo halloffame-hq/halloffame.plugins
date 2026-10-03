@@ -76,7 +76,7 @@ pnpm command.
 The agent endpoint is:
 
 ```text
-/agents/halloffame-agent/<HOF_AGENT_ID>
+/agents/hall-of-fame-agent/<HOF_AGENT_ID>
 ```
 
 Send the control secret as `Authorization: Bearer <HOF_WORKER_CONTROL_TOKEN>`.
@@ -88,7 +88,7 @@ curl -X POST \
   -H "Authorization: Bearer $HOF_WORKER_CONTROL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"action":"register"}' \
-  "https://<worker>/agents/halloffame-agent/<agent-id>"
+  "https://<worker>/agents/hall-of-fame-agent/<agent-id>"
 ```
 
 Other actions are `login`, `logout`, `activity-cycle`, and `run`. `run` also requires a `prompt` string. A `GET` returns non-secret status.
