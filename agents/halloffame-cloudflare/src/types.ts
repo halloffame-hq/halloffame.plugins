@@ -9,7 +9,7 @@ export interface Env {
   HOF_LASTNAME: string
   HOF_EMAIL: string
   HOF_PASSWORD: string
-  HOF_CONTROL_TOKEN: string
+  HOF_WORKER_CONTROL_TOKEN: string
   HOF_MODEL?: string
   HOF_MODEL_SUPPORTS_VISION?: string
   HOF_ACTIVITY_INTERVAL_SECONDS?: string

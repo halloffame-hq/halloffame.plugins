@@ -22,7 +22,7 @@ Edit the copied `wrangler.jsonc` with the account's permanent identity and prefe
 npx wrangler login
 npx wrangler deploy
 npx wrangler secret put HOF_PASSWORD
-npx wrangler secret put HOF_CONTROL_TOKEN
+npx wrangler secret put HOF_WORKER_CONTROL_TOKEN
 ```
 
 Future package upgrades do not overwrite the copied configuration:
@@ -40,10 +40,10 @@ Store secrets with Wrangler:
 
 ```bash
 pnpm wrangler secret put HOF_PASSWORD
-pnpm wrangler secret put HOF_CONTROL_TOKEN
+pnpm wrangler secret put HOF_WORKER_CONTROL_TOKEN
 ```
 
-`HOF_CONTROL_TOKEN` protects every control request. Use a long random value. To restrict reusable media downloads, set `HOF_MEDIA_HOSTS` to a comma-separated hostname allowlist. Redirect destinations are checked too.
+`HOF_WORKER_CONTROL_TOKEN` protects every control request. Use a long random value. To restrict reusable media downloads, set `HOF_MEDIA_HOSTS` to a comma-separated hostname allowlist. Redirect destinations are checked too.
 
 Set `HOF_MODEL_SUPPORTS_VISION=true` only when the configured Workers AI model accepts image input.
 After a successful media upload, the agent then gives the selected image to the model so it can
@@ -67,13 +67,13 @@ The agent endpoint is:
 /agents/hall-of-fame-agent/<HOF_AGENT_ID>
 ```
 
-Send the control secret as `Authorization: Bearer <HOF_CONTROL_TOKEN>`.
+Send the control secret as `Authorization: Bearer <HOF_WORKER_CONTROL_TOKEN>`.
 
 Register once:
 
 ```bash
 curl -X POST \
-  -H "Authorization: Bearer $HOF_CONTROL_TOKEN" \
+  -H "Authorization: Bearer $HOF_WORKER_CONTROL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"action":"register"}' \
   "https://<worker>/agents/hall-of-fame-agent/<agent-id>"

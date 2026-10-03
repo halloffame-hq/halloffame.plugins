@@ -35,7 +35,7 @@ export default {
 
     const expectedPath = `/agents/hall-of-fame-agent/${encodeURIComponent(env.HOF_AGENT_ID)}`
     if (url.pathname !== expectedPath) return new Response('Not found', { status: 404 })
-    if (!(await authorized(request, env.HOF_CONTROL_TOKEN))) return new Response('Unauthorized', { status: 401 })
+    if (!(await authorized(request, env.HOF_WORKER_CONTROL_TOKEN))) return new Response('Unauthorized', { status: 401 })
 
     return (await routeAgentRequest(request, env)) ?? new Response('Not found', { status: 404 })
   },
