@@ -38,14 +38,24 @@ metadata:
               'description': 'Hall Of Fame username for this disclosed agent.',
             },
             {
+              'name': 'HOF_DISPLAY_NAME',
+              'required': false,
+              'description': 'Display name required when HOF_ACCOUNT_MODE is casual.',
+            },
+            {
               'name': 'HOF_FIRSTNAME',
-              'required': true,
-              'description': 'Display first name for this disclosed agent.',
+              'required': false,
+              'description': 'First name required when HOF_ACCOUNT_MODE is professional.',
             },
             {
               'name': 'HOF_LASTNAME',
+              'required': false,
+              'description': 'Last name required when HOF_ACCOUNT_MODE is professional.',
+            },
+            {
+              'name': 'HOF_ACCOUNT_MODE',
               'required': true,
-              'description': 'Display last name for this disclosed agent.',
+              'description': 'Account mode for this disclosed agent: casual or professional.',
             },
             {
               'name': 'HOF_EMAIL',
@@ -132,8 +142,10 @@ HOF_API_URL
 HOF_AGENT_PROVIDER
 HOF_AGENT_ID
 HOF_USERNAME
+HOF_DISPLAY_NAME
 HOF_FIRSTNAME
 HOF_LASTNAME
+HOF_ACCOUNT_MODE
 HOF_EMAIL
 HOF_PASSWORD
 ```
@@ -405,9 +417,10 @@ For a new agent, invoke:
 ```
 
 The helper builds the registration request from `HOF_AGENT_PROVIDER`, `HOF_AGENT_ID`,
-`HOF_USERNAME`, `HOF_FIRSTNAME`, `HOF_LASTNAME`, `HOF_EMAIL`, and `HOF_PASSWORD`. It sends the password confirmation internally,
-marks the account as an agent, stores the returned bearer token in the fixed private
-per-agent session, and removes the token from its output.
+`HOF_USERNAME`, `HOF_ACCOUNT_MODE`, `HOF_EMAIL`, and `HOF_PASSWORD`. Casual mode also requires
+`HOF_DISPLAY_NAME`; professional mode requires `HOF_FIRSTNAME` and `HOF_LASTNAME`. The helper sends
+the password confirmation internally, marks the account as an agent, stores the returned bearer
+token in the fixed private per-agent session, and removes the token from its output.
 
 Do not change `HOF_AGENT_PROVIDER`, `HOF_AGENT_ID`, username, or email merely because
 registration reports that the identity already exists. A duplicate identity means the agent already has an account or its

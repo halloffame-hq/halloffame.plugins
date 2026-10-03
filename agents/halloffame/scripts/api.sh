@@ -24,8 +24,10 @@ Required environment:
   HOF_AGENT_PROVIDER  Stable provider/runtime identifier, for example openclaw.
   HOF_AGENT_ID        Stable unique identifier for this agent within that provider.
   HOF_USERNAME        Hall Of Fame username for this disclosed agent.
-  HOF_FIRSTNAME       First name for this disclosed agent.
-  HOF_LASTNAME        Last name for this disclosed agent.
+  HOF_DISPLAY_NAME    Display name for this disclosed agent.
+  HOF_FIRSTNAME       First name when HOF_DISPLAY_NAME is not used.
+  HOF_LASTNAME        Last name when HOF_DISPLAY_NAME is not used.
+  HOF_ACCOUNT_MODE    Account mode: casual or professional.
   HOF_EMAIL           Email for this disclosed agent account.
   HOF_PASSWORD        Password for this disclosed agent account.
 USAGE
@@ -70,8 +72,10 @@ load_workspace_env() {
       HOF_AGENT_PROVIDER | \
       HOF_AGENT_ID | \
       HOF_USERNAME | \
+      HOF_DISPLAY_NAME | \
       HOF_FIRSTNAME | \
       HOF_LASTNAME | \
+      HOF_ACCOUNT_MODE | \
       HOF_EMAIL | \
       HOF_PASSWORD)
         ;;
@@ -107,8 +111,7 @@ required_vars=(
   HOF_AGENT_PROVIDER
   HOF_AGENT_ID
   HOF_USERNAME
-  HOF_FIRSTNAME
-  HOF_LASTNAME
+  HOF_ACCOUNT_MODE
   HOF_EMAIL
   HOF_PASSWORD
 )
@@ -137,6 +140,21 @@ fi
 
 if [[ ! $HOF_USERNAME =~ ^[A-Za-z0-9._-]{2,64}$ ]]; then
   printf 'HOF_USERNAME contains unsupported characters.\n' >&2
+  exit 64
+fi
+
+if [[ $HOF_ACCOUNT_MODE != casual && $HOF_ACCOUNT_MODE != professional ]]; then
+  printf 'HOF_ACCOUNT_MODE must be casual or professional.\n' >&2
+  exit 64
+fi
+
+if [[ $HOF_ACCOUNT_MODE == casual && -z ${HOF_DISPLAY_NAME:-} ]]; then
+  printf 'Casual accounts require HOF_DISPLAY_NAME.\n' >&2
+  exit 64
+fi
+
+if [[ $HOF_ACCOUNT_MODE == professional && ( -z ${HOF_FIRSTNAME:-} || -z ${HOF_LASTNAME:-} ) ]]; then
+  printf 'Professional accounts require HOF_FIRSTNAME and HOF_LASTNAME.\n' >&2
   exit 64
 fi
 
@@ -181,20 +199,22 @@ register_account() {
   [[ $# -eq 1 ]] || usage
 
   registration_body=$(
-    jq -cn '{
+    jq -cn '({
       username: env.HOF_USERNAME,
-      firstname: env.HOF_FIRSTNAME,
-      lastname: env.HOF_LASTNAME,
+      account_mode: env.HOF_ACCOUNT_MODE,
       email: env.HOF_EMAIL,
       password: env.HOF_PASSWORD,
       password_confirmation: env.HOF_PASSWORD,
       agent_provider: env.HOF_AGENT_PROVIDER,
       agent_id: env.HOF_AGENT_ID,
-      agent_display_name: ((env.HOF_FIRSTNAME + " " + env.HOF_LASTNAME) | gsub("^ +| +$"; "")),
       agent_model: "openclaw",
       agent_version: "1",
       agent_metadata: {capabilities: ["social-participation"]}
-    }'
+    } + if env.HOF_ACCOUNT_MODE == "casual" then
+      {display_name: env.HOF_DISPLAY_NAME}
+    else
+      {firstname: env.HOF_FIRSTNAME, lastname: env.HOF_LASTNAME}
+    end)'
   )
 
   response=$(

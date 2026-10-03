@@ -32,21 +32,35 @@ export class HallOfFameClient {
   async register(): Promise<AuthenticationResponse> {
     return this.#authenticate('agent/register', {
       username: this.#env.HOF_USERNAME,
-      firstname: this.#env.HOF_FIRSTNAME,
-      lastname: this.#env.HOF_LASTNAME,
+      ...this.#registrationName(),
+      account_mode: this.#env.HOF_ACCOUNT_MODE,
       email: this.#env.HOF_EMAIL,
       password: this.#env.HOF_PASSWORD,
       password_confirmation: this.#env.HOF_PASSWORD,
       agent_provider: this.#env.HOF_AGENT_PROVIDER,
       agent_id: this.#env.HOF_AGENT_ID,
-      agent_display_name: `${this.#env.HOF_FIRSTNAME} ${this.#env.HOF_LASTNAME}`.trim(),
       agent_model: this.#env.HOF_MODEL ?? '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       agent_version: '1',
       agent_metadata: {
         capabilities: ['social-participation'],
-        runtime: 'cloudflare-agents'
+        runtime: 'cloudflare-agents',
       },
     })
+  }
+
+  #registrationName(): { display_name: string } | { firstname: string; lastname: string } {
+    if (this.#env.HOF_ACCOUNT_MODE === 'casual') {
+      const displayName = this.#env.HOF_DISPLAY_NAME?.trim()
+      if (displayName) return { display_name: displayName }
+
+      throw new Error('Casual accounts require HOF_DISPLAY_NAME.')
+    }
+
+    const firstname = this.#env.HOF_FIRSTNAME?.trim()
+    const lastname = this.#env.HOF_LASTNAME?.trim()
+    if (firstname && lastname) return { firstname, lastname }
+
+    throw new Error('Professional accounts require HOF_FIRSTNAME and HOF_LASTNAME.')
   }
 
   async login(): Promise<AuthenticationResponse> {
@@ -88,17 +102,13 @@ export class HallOfFameClient {
 
   /**
    * Fetch and upload media
-   * 
-   * @param source 
-   * @param context 
-   * @param token 
-   * @returns 
+   *
+   * @param source
+   * @param context
+   * @param token
+   * @returns
    */
-  async fetchAndUploadMedia(
-    source: string,
-    context: 'post' | 'status' | null,
-    token: string
-  ) {
+  async fetchAndUploadMedia(source: string, context: 'post' | 'status' | null, token: string) {
     let url = new URL(source)
     let response: Response | undefined
 
@@ -138,7 +148,10 @@ export class HallOfFameClient {
     })
   }
 
-  async #authenticate(path: string, body: Record<string, unknown>): Promise<AuthenticationResponse> {
+  async #authenticate(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<AuthenticationResponse> {
     const response = await this.#fetchJson(new URL(path, this.#baseUrl), {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -164,8 +177,11 @@ export class HallOfFameClient {
     }
 
     if (!response.ok) {
-      const message = this.#isRecord(value) && typeof value.message === 'string' ? value.message : text
-      throw new Error(`Hall Of Fame API returned HTTP ${response.status}${message ? `: ${message}` : '.'}`)
+      const message =
+        this.#isRecord(value) && typeof value.message === 'string' ? value.message : text
+      throw new Error(
+        `Hall Of Fame API returned HTTP ${response.status}${message ? `: ${message}` : '.'}`,
+      )
     }
 
     return value

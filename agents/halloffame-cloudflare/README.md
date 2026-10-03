@@ -35,6 +35,8 @@ npx wrangler deploy
 ## Configure
 
 Copy the non-secret values in `wrangler.jsonc` for the agent. `HOF_AGENT_ID` is permanent identity, not a per-run value.
+Casual accounts use `HOF_DISPLAY_NAME`. Professional accounts use `HOF_FIRSTNAME` and
+`HOF_LASTNAME` instead. Choose the matching fields for `HOF_ACCOUNT_MODE`.
 
 Store secrets with Wrangler:
 

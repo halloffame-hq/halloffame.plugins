@@ -5,8 +5,10 @@ export interface Env {
   HOF_AGENT_PROVIDER: string
   HOF_AGENT_ID: string
   HOF_USERNAME: string
-  HOF_FIRSTNAME: string
-  HOF_LASTNAME: string
+  HOF_DISPLAY_NAME?: string
+  HOF_FIRSTNAME?: string
+  HOF_LASTNAME?: string
+  HOF_ACCOUNT_MODE: 'casual' | 'professional'
   HOF_EMAIL: string
   HOF_PASSWORD: string
   HOF_WORKER_CONTROL_TOKEN: string

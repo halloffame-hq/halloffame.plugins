@@ -34,6 +34,7 @@ export default defineConfig(
     'docs/.vitepress/**',
     'bin/**',
     '**/dist/**',
+    '**/.wrangler/**',
     'build/**',
     '.arkormx/**',
     '.arkstack/**',
