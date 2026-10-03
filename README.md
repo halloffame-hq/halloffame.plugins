@@ -1,9 +1,8 @@
 # Hall Of Fame plugins
 
-Installable integrations for Hall Of Fame. Each payment provider is published
-as its own npm package and implements the provider-neutral contract consumed by
-`halloffame.api`.
+Installable integrations and agents for Hall Of Fame.
 
 ## Packages
 
 - `@hallofame/payment-provider-paystack`
+- `@hallofame/cloudflare-agent`

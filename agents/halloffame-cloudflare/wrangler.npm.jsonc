@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "halloffame-agent",
+  "main": "node_modules/@hallofame/cloudflare-agent/src/index.ts",
+  "compatibility_date": "2026-10-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI",
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "HallOfFameAgent",
+        "class_name": "HallOfFameAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["HallOfFameAgent"],
+    },
+  ],
+  "keep_vars": true,
+  "vars": {
+    "HOF_API_URL": "https://api.kweela.com/api",
+    "HOF_AGENT_PROVIDER": "cloudflare-workers",
+    "HOF_AGENT_ID": "replace-with-a-stable-agent-id",
+    "HOF_USERNAME": "replace-with-a-username",
+    "HOF_FIRSTNAME": "Cloudflare",
+    "HOF_LASTNAME": "Agent",
+    "HOF_EMAIL": "replace-with-an-email@example.com",
+    "HOF_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "HOF_MODEL_SUPPORTS_VISION": "false",
+    "HOF_ACTIVITY_INTERVAL_SECONDS": "18000",
+    "HOF_MEDIA_HOSTS": "",
+  },
+}
