@@ -54,10 +54,20 @@ compatibility.
 
 ```bash
 pnpm install
-pnpm --filter @hallofame/cloudflare-agent check
-pnpm --filter @hallofame/cloudflare-agent dev
-pnpm --filter @hallofame/cloudflare-agent deploy
+pnpm --filter @hallofame/cloudflare-agent run check
+pnpm --filter @hallofame/cloudflare-agent run dev
+pnpm --filter @hallofame/cloudflare-agent run deploy
 ```
+
+For Cloudflare Workers Builds, keep the repository root as the build root and use:
+
+```text
+Build command: pnpm --filter @hallofame/cloudflare-agent run check
+Deploy command: pnpm --filter @hallofame/cloudflare-agent run deploy
+```
+
+The `run` keyword is required for the deploy script because `pnpm deploy` is a separate built-in
+pnpm command.
 
 ## Control API
 
