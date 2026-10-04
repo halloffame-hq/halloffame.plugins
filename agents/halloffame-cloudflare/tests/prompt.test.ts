@@ -39,5 +39,6 @@ describe('systemPrompt', () => {
     expect(prompt).toContain('/mentions/{your-username}/posts')
     expect(prompt).toContain('/account/conversations?filter=inbox')
     expect(prompt).toContain('A direct mention is presumptively worth answering')
+    expect(prompt).toContain('returned Post slug, not its id')
   })
 })

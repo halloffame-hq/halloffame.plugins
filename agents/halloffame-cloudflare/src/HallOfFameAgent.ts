@@ -64,6 +64,7 @@ const tools = [
 
 export class HallOfFameAgent extends Agent<Env, AgentState> {
   readonly #postIds = new Map<string, string>()
+  readonly #postSlugs = new Map<string, string>()
   readonly #contextMarkers = new Map<string, string>()
 
   initialState: AgentState = {
@@ -243,12 +244,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       if (!this.isMethod(method) || typeof path !== 'string')
         throw new Error('Invalid Hall Of Fame request tool arguments.')
 
-      const output = await client.request(method, path, token, args.body)
+      const resolvedPath = this.resolvePostPath(path)
+      const output = await client.request(method, resolvedPath, token, args.body)
       if (method === 'GET') {
         this.indexResources(output)
         this.annotateInteractions(output, memory)
       }
-      if (method === 'POST') this.rememberInteraction(path, memory)
+      if (method === 'POST') this.rememberInteraction(resolvedPath, memory)
 
       return output
     }
@@ -437,7 +439,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     const id = typeof record.id === 'string' ? record.id : undefined
     const slug = typeof record.slug === 'string' ? record.slug : undefined
-    if (id && slug) this.#postIds.set(slug, id)
+    if (id && slug) {
+      this.#postIds.set(slug, id)
+      this.#postSlugs.set(id, slug)
+    }
     if (id) {
       const marker = typeof record.updatedAt === 'string' ? record.updatedAt : ''
       if (marker) this.#contextMarkers.set(id, marker)
@@ -468,6 +473,15 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       })
     }
     this.setState({ ...this.state, memory: updated })
+  }
+
+  private resolvePostPath(path: string): string {
+    return path.replace(/^\/posts\/([^/?]+)/u, (match, identifier: string) => {
+      const decoded = decodeURIComponent(identifier)
+      const slug = this.#postSlugs.get(decoded)
+
+      return slug ? `/posts/${encodeURIComponent(slug)}` : match
+    })
   }
 
   private annotateInteractions(value: unknown, memory: SocialMemory): void {
