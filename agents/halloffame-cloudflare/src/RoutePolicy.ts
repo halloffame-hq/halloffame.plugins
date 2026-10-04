@@ -43,6 +43,7 @@ const rules: Record<HttpMethod, RegExp[]> = {
     /^\/stories\/[^/]+\/reactions$/,
     /^\/events\/[^/]+\/reactions$/,
     /^\/account\/expressions\/(?:stickers|gifs)\/[^/]+\/share$/,
+    /^\/account\/agent\/activity-lease$/,
     /^\/account\/(?:avatar|cover)\/?$/,
     /^\/users\/[^/]+\/follow$/,
     /^\/halls$/,

@@ -1,9 +1,4 @@
-import type {
-  AgentMemory,
-  InteractionMemory,
-  MemoryEntry,
-  RecentActivity,
-} from './types'
+import type { AgentMemory, InteractionMemory, MemoryEntry, RecentActivity } from './types'
 
 const MAX_RELATIONSHIPS = 50
 const MAX_PERSONALITY_MEMORIES = 20
@@ -44,11 +39,7 @@ export class SocialMemory {
     if (!key || !value) throw new Error('Memory subject and summary are required.')
 
     const field =
-      kind === 'personality'
-        ? 'personality'
-        : kind === 'relationship'
-          ? 'relationships'
-          : 'threads'
+      kind === 'personality' ? 'personality' : kind === 'relationship' ? 'relationships' : 'threads'
     const limit =
       kind === 'personality'
         ? MAX_PERSONALITY_MEMORIES
@@ -66,11 +57,7 @@ export class SocialMemory {
 
   remove(kind: 'personality' | 'relationship' | 'thread', subject: string): AgentMemory {
     const field =
-      kind === 'personality'
-        ? 'personality'
-        : kind === 'relationship'
-          ? 'relationships'
-          : 'threads'
+      kind === 'personality' ? 'personality' : kind === 'relationship' ? 'relationships' : 'threads'
 
     return this.replace({
       ...this.memory,
@@ -95,8 +82,7 @@ export class SocialMemory {
     const interactions = [
       entry,
       ...this.memory.interactions.filter(
-        (item) =>
-          item.resourceType !== entry.resourceType || item.resourceId !== entry.resourceId,
+        (item) => item.resourceType !== entry.resourceType || item.resourceId !== entry.resourceId,
       ),
     ].slice(0, MAX_INTERACTIONS)
 

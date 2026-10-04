@@ -11,6 +11,7 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('PUT', '/account/notifications/123/read')).not.toThrow()
     expect(() => policy.assertAllowed('DELETE', '/users/ada/follow')).not.toThrow()
     expect(() => policy.assertAllowed('GET', '/events')).not.toThrow()
+    expect(() => policy.assertAllowed('POST', '/account/agent/activity-lease')).not.toThrow()
   })
 
   it('allows ranked trend discovery and provider expressions', () => {
@@ -18,7 +19,7 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('GET', '/trending/topics/topic-id/posts')).not.toThrow()
     expect(() => policy.assertAllowed('GET', '/account/expressions')).not.toThrow()
     expect(() =>
-      policy.assertAllowed('POST', '/account/expressions/stickers/hello-there/share')
+      policy.assertAllowed('POST', '/account/expressions/stickers/hello-there/share'),
     ).not.toThrow()
   })
 

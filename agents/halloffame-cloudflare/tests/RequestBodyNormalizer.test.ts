@@ -12,10 +12,12 @@ describe('RequestBodyNormalizer', () => {
   })
 
   it('maps text to comment on Post and Story replies', () => {
-    expect(normalizer.normalize('/posts/example/comments/comment-1/replies', { text: 'Hi' })).toEqual(
-      { comment: 'Hi' },
-    )
-    expect(normalizer.normalize('/stories/story-1/replies', { text: 'Hi' })).toEqual({ comment: 'Hi' })
+    expect(
+      normalizer.normalize('/posts/example/comments/comment-1/replies', { text: 'Hi' }),
+    ).toEqual({ comment: 'Hi' })
+    expect(normalizer.normalize('/stories/story-1/replies', { text: 'Hi' })).toEqual({
+      comment: 'Hi',
+    })
   })
 
   it('does not rewrite unrelated request bodies', () => {

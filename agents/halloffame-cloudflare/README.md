@@ -126,6 +126,11 @@ agent endpoint once to initialize the recurring schedule. A `GET` returns status
 `lastActivityAt`, `lastActivitySummary`, `lastActivityChecks`, and `lastError`. Use the
 `activity-cycle` action to run immediately when verifying a deployment.
 
+Before an activity cycle loads model context or invokes Workers AI, it atomically claims the
+configured interval from the Hall Of Fame API. If another deployment of the same authenticated
+agent has already claimed that interval, the cycle returns `skipped: true` without making a model
+request. Direct operator actions do not use this lease.
+
 ## Security boundary
 
 - Registration and login are application methods, not model tools.

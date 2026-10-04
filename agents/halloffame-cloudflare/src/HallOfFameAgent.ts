@@ -89,10 +89,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   async onStart(): Promise<void> {
-    const configured = Number(this.env.HOF_ACTIVITY_INTERVAL_SECONDS ?? DEFAULT_INTERVAL_SECONDS)
-    const interval =
-      Number.isSafeInteger(configured) && configured >= 60 ? configured : DEFAULT_INTERVAL_SECONDS
-    await this.scheduleEvery(interval, 'scheduledActivityCycle', {})
+    await this.scheduleEvery(this.activityIntervalSeconds(), 'scheduledActivityCycle', {})
   }
 
   async onRequest(request: Request): Promise<Response> {
@@ -228,8 +225,35 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return typeof id === 'string' && id !== '' ? id : undefined
   }
 
-  async runActivityCycle(): Promise<{ summary: string }> {
-    await this.login()
+  async runActivityCycle(): Promise<{
+    summary: string
+    skipped?: boolean
+    nextActivityAt?: string | null
+  }> {
+    const token = await this.requireToken()
+    const claim = await new HallOfFameClient(this.env).request(
+      'POST',
+      '/account/agent/activity-lease',
+      token,
+      { interval_seconds: this.activityIntervalSeconds() },
+    )
+    const lease = this.asRecord(this.asRecord(claim).data)
+
+    if (lease.acquired !== true) {
+      const nextActivityAt = typeof lease.nextActivityAt === 'string' ? lease.nextActivityAt : null
+      const summary = nextActivityAt
+        ? `Activity cycle skipped. Another runtime holds the interval until ${nextActivityAt}.`
+        : 'Activity cycle skipped. This runtime did not acquire the activity interval.'
+
+      this.setState({
+        ...this.state,
+        authenticated: true,
+        lastActivitySummary: summary,
+        lastError: null,
+      })
+
+      return { summary, skipped: true, nextActivityAt }
+    }
 
     return this.run(activityPrompt, true)
   }
@@ -295,12 +319,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         })
 
         for (const call of calls) {
-          const output = await this.executeToolSafely(
-            call,
-            token,
-            memory,
-            minimalCycle,
-          )
+          const output = await this.executeToolSafely(call, token, memory, minimalCycle)
           messages.push({
             role: 'tool',
             name: call.name,
@@ -450,7 +469,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         const retriable = this.#retryPolicy.isRetriable(error, method)
         if (!retriable || attempt === this.#retryPolicy.maxAttempts) {
           const message = this.errorMessage(error)
-          this.recordRequestFailure(`${method} ${String(args.path ?? call.name)}`, message, attempt, retriable)
+          this.recordRequestFailure(
+            `${method} ${String(args.path ?? call.name)}`,
+            message,
+            attempt,
+            retriable,
+          )
 
           return { error: message, retriable, attempts: attempt }
         }
@@ -553,12 +577,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   ): Promise<ActivityContext> {
     const sources = this.minimalOperationsEnabled()
       ? {
-        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-      }
+          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+        }
       : {
-        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-        mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
-      }
+          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+          mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+        }
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {
         try {
@@ -566,10 +590,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
           this.indexResources(value)
           this.annotateInteractions(value, memory)
 
-          return [
-            name,
-            { status: 'ok' as const, value },
-          ] as const
+          return [name, { status: 'ok' as const, value }] as const
         } catch (error) {
           return [
             name,
@@ -606,7 +627,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         lastError = error
         const retriable = this.#retryPolicy.isRetriable(error, method)
         if (!retriable || attempt === this.#retryPolicy.maxAttempts) {
-          this.recordRequestFailure(`${method} ${path}`, this.errorMessage(error), attempt, retriable)
+          this.recordRequestFailure(
+            `${method} ${path}`,
+            this.errorMessage(error),
+            attempt,
+            retriable,
+          )
           throw error
         }
         await new Promise((resolve) => setTimeout(resolve, this.#retryPolicy.delay(error, attempt)))
@@ -650,9 +676,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       occurredAt: new Date().toISOString(),
     }
     const retained =
-      matchingIndex >= 0
-        ? failures.filter((_, index) => index !== matchingIndex)
-        : failures
+      matchingIndex >= 0 ? failures.filter((_, index) => index !== matchingIndex) : failures
     this.setState({
       ...this.state,
       recentRequestFailures: [...retained, failure].slice(-MAX_REQUEST_FAILURES),
@@ -677,6 +701,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
   private minimalOperationsEnabled(): boolean {
     return this.env.HOF_MINIMAL_OPERATIONS?.trim().toLowerCase() === 'true'
+  }
+
+  private activityIntervalSeconds(): number {
+    const configured = Number(this.env.HOF_ACTIVITY_INTERVAL_SECONDS ?? DEFAULT_INTERVAL_SECONDS)
+
+    return Number.isSafeInteger(configured) && configured >= 60 && configured <= 86_400
+      ? configured
+      : DEFAULT_INTERVAL_SECONDS
   }
 
   private assertMinimalCycleRequest(method: HttpMethod, path: string): void {

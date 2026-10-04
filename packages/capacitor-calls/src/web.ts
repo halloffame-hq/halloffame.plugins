@@ -45,7 +45,7 @@ export class HallOfFameCallsWeb extends WebPlugin implements HallOfFameCallsPlug
       .catch(() => undefined)
   }
 
-  async openOverlaySettings(): Promise<void> { }
+  async openOverlaySettings(): Promise<void> {}
 
   /** The application bundles the audio, so it sends the source along with the choice. */
   async setRingtone(options: { tone: number; src?: string }): Promise<{ tones: number }> {
@@ -59,7 +59,7 @@ export class HallOfFameCallsWeb extends WebPlugin implements HallOfFameCallsPlug
   }
 
   /** A page picks an output device rather than a built-in speaker; `route` does that. */
-  async ringOnSpeaker(): Promise<void> { }
+  async ringOnSpeaker(): Promise<void> {}
 
   async incoming(options: IncomingCallOptions): Promise<{ held: boolean }> {
     const here = page()
