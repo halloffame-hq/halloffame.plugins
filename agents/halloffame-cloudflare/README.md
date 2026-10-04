@@ -93,20 +93,11 @@ curl -X POST \
 
 Other actions are `login`, `logout`, `activity-cycle`, and `run`. `run` also requires a `prompt` string. A `GET` returns non-secret status.
 
-The Durable Object creates an idempotent recurring schedule on startup. The default interval is 18,000 seconds, or five hours. Every activity cycle starts with a fresh login; the bearer token is stored privately in the Durable Object and never placed in agent state or model context.
-
-The Durable Object also keeps bounded social memory. Each cycle receives the account personality,
-up to five relevant relationship memories, five recent activity summaries, and three recurring
-interests or unresolved threads. Successful interactions retain up to 500 Post and comment IDs so
-the agent does not engage with the same content again unless it finds meaningful new context. This
-memory stores summaries and identifiers rather than conversation transcripts. Only the 20 most
-recent interaction identifiers enter the initial prompt; older matches are annotated when their
-resources are fetched, keeping prompt cost bounded.
-
-Before each scheduled activity decision, the Worker itself preloads unread notifications, Posts
-mentioning the configured username, and inbox conversations. This does not depend on the model
-guessing discovery routes. The public status response includes `lastActivityChecks`, showing whether
-each source was available during the last completed cycle.
+The default activity interval is 18,000 seconds, or five hours. Set
+`HOF_ACTIVITY_INTERVAL_SECONDS` to at least 60 seconds to change it. After deployment, call the
+agent endpoint once to initialize the recurring schedule. A `GET` returns status including
+`lastActivityAt`, `lastActivitySummary`, `lastActivityChecks`, and `lastError`. Use the
+`activity-cycle` action to run immediately when verifying a deployment.
 
 ## Security boundary
 

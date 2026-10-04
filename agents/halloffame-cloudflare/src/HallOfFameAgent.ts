@@ -5,6 +5,7 @@ import { Agent } from 'agents'
 import { HallOfFameClient } from './HallOfFameClient'
 import { SocialMemory } from './SocialMemory'
 import { WorkersAIResponse } from './WorkersAIResponse'
+import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 
 const TOKEN_KEY = 'halloffame-token'
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
@@ -21,13 +22,18 @@ interface ActivityContext {
 const tools = [
   {
     name: 'halloffame_request',
-    description: 'Make one request to the constrained Hall Of Fame social API.',
+    description:
+      'Make one request to the constrained Hall Of Fame social API using the exact route and body shape in the verified API contract from the system prompt.',
     parameters: {
       type: 'object',
       properties: {
         method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'] },
         path: { type: 'string', description: 'Relative Hall Of Fame API path beginning with /.' },
-        body: { type: 'object', description: 'JSON body for POST or PUT only.' },
+        body: {
+          type: 'object',
+          description:
+            'JSON body for POST or PUT only. Post comments, Post replies, and Story replies require a comment field, not text or content.',
+        },
       },
       required: ['method', 'path'],
     },
@@ -66,6 +72,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   readonly #postIds = new Map<string, string>()
   readonly #postSlugs = new Map<string, string>()
   readonly #contextMarkers = new Map<string, string>()
+  readonly #bodyNormalizer = new RequestBodyNormalizer()
 
   initialState: AgentState = {
     authenticated: false,
@@ -84,7 +91,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   async onRequest(request: Request): Promise<Response> {
-    if (request.method === 'GET') return Response.json(this.state)
+    if (request.method === 'GET') {
+      const { memory: _memory, ...status } = this.state
+
+      return Response.json(status)
+    }
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
     try {
@@ -157,6 +168,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
     const messages: ModelMessage[] = [
       { role: 'system', content: systemPrompt(personality) },
+      {
+        role: 'system',
+        content: `Authenticated Hall Of Fame account state for this cycle:\n${JSON.stringify(identity)}`,
+      },
       { role: 'system', content: this.memoryPrompt(memory.snapshot(prompt)) },
       {
         role: 'user',
@@ -209,7 +224,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         })
 
         for (const call of calls) {
-          const output = await this.executeTool(call, token, memory)
+          const output = await this.executeToolSafely(call, token, memory)
           messages.push({
             role: 'tool',
             name: call.name,
@@ -245,7 +260,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         throw new Error('Invalid Hall Of Fame request tool arguments.')
 
       const resolvedPath = this.resolvePostPath(path)
-      const output = await client.request(method, resolvedPath, token, args.body)
+      const body = this.#bodyNormalizer.normalize(resolvedPath, args.body)
+      const output = await client.request(method, resolvedPath, token, body)
       if (method === 'GET') {
         this.indexResources(output)
         this.annotateInteractions(output, memory)
@@ -299,6 +315,23 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
 
     throw new Error(`Unknown tool: ${call.name}`)
+  }
+
+  private async executeToolSafely(
+    call: ToolCall,
+    token: string,
+    memory: SocialMemory,
+  ): Promise<unknown> {
+    try {
+      return await this.executeTool(call, token, memory)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown Hall Of Fame tool error.'
+
+      return {
+        error: message,
+        recoverable: !/HTTP (?:401|402|403|429)\b/u.test(message),
+      }
+    }
   }
 
   private parseToolCalls(input: unknown[] | undefined): ToolCall[] {
@@ -391,9 +424,9 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     memory: SocialMemory,
   ): Promise<ActivityContext> {
     const sources = {
-      unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=10',
-      mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=10`,
-      inbox: '/account/conversations?filter=inbox&page=1&per_page=10',
+      unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+      mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+      inbox: '/account/conversations?filter=inbox&page=1&per_page=20',
     }
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {

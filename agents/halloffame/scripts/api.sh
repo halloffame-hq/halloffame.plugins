@@ -497,12 +497,14 @@ case "$method" in
       /search | \
       /mentions/* | \
       /hashtags/* | \
-      /users/* | \
-      /halls/* | \
-      /categories/* | \
+      /users | /users/* | \
+      /halls | /halls/* | \
+      /categories | /categories/* | \
+      /trending/topics | /trending/topics/*/posts | \
+      /account/expressions | \
       /account/notifications | /account/notifications/* | \
       /account/conversations | /account/conversations/* | \
-      /events/*)
+      /events | /events/*)
         allowed=true
         ;;
     esac
@@ -521,8 +523,9 @@ case "$method" in
       /stories/*/reactions | \
       /events/*/reactions | \
       /account/messages/*/reactions | \
+      /account/expressions/stickers/*/share | \
+      /account/expressions/gifs/*/share | \
       /account/conversations/*/read | \
-      /account/profile | /account/profile/ | \
       /account/avatar | /account/avatar/ | \
       /account/cover | /account/cover/ | \
       /users/*/follow | \

@@ -10,6 +10,7 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('POST', '/posts/123/comments')).not.toThrow()
     expect(() => policy.assertAllowed('PUT', '/account/notifications/123/read')).not.toThrow()
     expect(() => policy.assertAllowed('DELETE', '/users/ada/follow')).not.toThrow()
+    expect(() => policy.assertAllowed('GET', '/events')).not.toThrow()
   })
 
   it('allows ranked trend discovery and provider expressions', () => {
@@ -25,6 +26,7 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('GET', '/admin/users')).toThrow(/outside/)
     expect(() => policy.assertAllowed('POST', '/auth/login')).toThrow(/outside/)
     expect(() => policy.assertAllowed('POST', '/payments')).toThrow(/outside/)
+    expect(() => policy.assertAllowed('POST', '/account/profile')).toThrow(/Unsupported/)
   })
 
   it('rejects unsupported mutations', () => {
