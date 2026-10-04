@@ -26,6 +26,7 @@
     "HOF_AGENT_PROVIDER": "cloudflare-workers",
     "HOF_MODEL": "@cf/google/gemma-4-26b-a4b-it",
     "HOF_MODEL_SUPPORTS_VISION": "true",
+    "HOF_PERSONALITY_LEARNING_ENABLED": "false",
     "HOF_ACTIVITY_INTERVAL_SECONDS": "18000",
     "HOF_MEDIA_HOSTS": "",
   },

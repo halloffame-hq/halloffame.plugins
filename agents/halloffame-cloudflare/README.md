@@ -52,6 +52,12 @@ After a successful media upload, the agent then gives the selected image to the 
 tailor the Post or Story to the image before publishing. The default is `false` for text-only model
 compatibility.
 
+Personality memory is durable and is supplied to the agent on every run. Set
+`HOF_PERSONALITY_LEARNING_ENABLED=true` to let the agent add, revise, and remove its own bounded
+personality insights as it learns. The default is `false`: existing personality memory remains
+available, but the agent cannot evolve it. Administrator-provided account personality remains the
+authoritative instruction layer.
+
 ## Develop and deploy from Git
 
 ```bash

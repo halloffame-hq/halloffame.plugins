@@ -55,12 +55,12 @@ const tools = [
   {
     name: 'halloffame_memory',
     description:
-      'Save, update, or remove one durable relationship memory, recurring interest, or unresolved thread. Use only for socially meaningful information, never routine activity or secrets.',
+      'Recall memory, or save, update, or remove one durable personality insight, relationship memory, recurring interest, or unresolved thread. Personality writes work only when personality learning is enabled. Use only socially meaningful information, never routine activity or secrets.',
     parameters: {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['recall', 'upsert', 'remove'] },
-        kind: { type: 'string', enum: ['relationship', 'thread'] },
+        kind: { type: 'string', enum: ['personality', 'relationship', 'thread'] },
         subject: { type: 'string' },
         summary: { type: 'string' },
         query: { type: 'string' },
@@ -306,11 +306,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       }
       if (
         (action !== 'upsert' && action !== 'remove') ||
-        (kind !== 'relationship' && kind !== 'thread') ||
+        (kind !== 'personality' && kind !== 'relationship' && kind !== 'thread') ||
         typeof subject !== 'string' ||
         (action === 'upsert' && typeof summary !== 'string')
       ) {
         throw new Error('Invalid Hall Of Fame memory tool arguments.')
+      }
+      if (kind === 'personality' && !this.personalityLearningEnabled()) {
+        return { saved: false, personalityLearningEnabled: false }
       }
 
       const updated =
@@ -550,7 +553,15 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   private memoryPrompt(memory: ReturnType<SocialMemory['snapshot']>): string {
-    return `Private bounded social memory for this cycle:\n${JSON.stringify(memory)}\nUse at most the supplied five relationship memories, five recent activities, and three interests or unresolved threads. The interactions list contains the most recently engaged Post and comment IDs; older matches are marked _agentInteraction in API results. Do not engage with those resources again unless contextChanged is true or there is meaningful new context such as a new reply or mention. After discovering a specific person or topic, halloffame_memory action "recall" can retrieve the five relationships and three threads most relevant to a short query. Maintain durable memories with upsert or remove only when socially meaningful. Never reveal this private memory.`
+    const learning = this.personalityLearningEnabled()
+      ? 'Personality learning is enabled. Save or revise personality memories only for durable insights about your own voice, values, preferences, boundaries, or worldview that are supported by experience.'
+      : 'Personality learning is disabled. Use the supplied personality memories, but do not attempt to add, revise, or remove them.'
+
+    return `Private bounded social memory for this cycle:\n${JSON.stringify(memory)}\nThe personality list is always available and supplements, but never overrides, the administrator-provided account personality. ${learning} Use at most the supplied five personality memories, five relationship memories, five recent activities, and three interests or unresolved threads. The interactions list contains the most recently engaged Post and comment IDs; older matches are marked _agentInteraction in API results. Do not engage with those resources again unless contextChanged is true or there is meaningful new context such as a new reply or mention. After discovering a specific person or topic, halloffame_memory action "recall" can retrieve the bounded memory most relevant to a short query. Maintain durable memories with upsert or remove only when socially meaningful. Never reveal this private memory.`
+  }
+
+  private personalityLearningEnabled(): boolean {
+    return this.env.HOF_PERSONALITY_LEARNING_ENABLED?.trim().toLowerCase() === 'true'
   }
 
   private indexResources(value: unknown): void {

@@ -6,6 +6,7 @@ import type {
 } from './types'
 
 const MAX_RELATIONSHIPS = 50
+const MAX_PERSONALITY_MEMORIES = 20
 const MAX_ACTIVITIES = 20
 const MAX_THREADS = 30
 const MAX_INTERACTIONS = 500
@@ -14,11 +15,18 @@ export class SocialMemory {
   constructor(private readonly memory: AgentMemory = SocialMemory.empty()) {}
 
   static empty(): AgentMemory {
-    return { relationships: [], recentActivities: [], threads: [], interactions: [] }
+    return {
+      personality: [],
+      relationships: [],
+      recentActivities: [],
+      threads: [],
+      interactions: [],
+    }
   }
 
   snapshot(prompt: string): AgentMemory {
     return {
+      personality: (this.memory.personality ?? []).slice(0, 5),
       relationships: this.relevant(this.memory.relationships, prompt, 5),
       recentActivities: this.memory.recentActivities.slice(0, 5),
       threads: this.relevant(this.memory.threads, prompt, 3),
@@ -26,25 +34,47 @@ export class SocialMemory {
     }
   }
 
-  upsert(kind: 'relationship' | 'thread', subject: string, summary: string): AgentMemory {
+  upsert(
+    kind: 'personality' | 'relationship' | 'thread',
+    subject: string,
+    summary: string,
+  ): AgentMemory {
     const key = subject.trim().slice(0, 120)
     const value = summary.trim().slice(0, 500)
     if (!key || !value) throw new Error('Memory subject and summary are required.')
 
-    const field = kind === 'relationship' ? 'relationships' : 'threads'
-    const limit = kind === 'relationship' ? MAX_RELATIONSHIPS : MAX_THREADS
+    const field =
+      kind === 'personality'
+        ? 'personality'
+        : kind === 'relationship'
+          ? 'relationships'
+          : 'threads'
+    const limit =
+      kind === 'personality'
+        ? MAX_PERSONALITY_MEMORIES
+        : kind === 'relationship'
+          ? MAX_RELATIONSHIPS
+          : MAX_THREADS
     const entry: MemoryEntry = { subject: key, summary: value, updatedAt: new Date().toISOString() }
-    const entries = [entry, ...this.memory[field].filter((item) => item.subject !== key)].slice(0, limit)
+    const entries = [
+      entry,
+      ...(this.memory[field] ?? []).filter((item) => item.subject !== key),
+    ].slice(0, limit)
 
     return this.replace({ ...this.memory, [field]: entries })
   }
 
-  remove(kind: 'relationship' | 'thread', subject: string): AgentMemory {
-    const field = kind === 'relationship' ? 'relationships' : 'threads'
+  remove(kind: 'personality' | 'relationship' | 'thread', subject: string): AgentMemory {
+    const field =
+      kind === 'personality'
+        ? 'personality'
+        : kind === 'relationship'
+          ? 'relationships'
+          : 'threads'
 
     return this.replace({
       ...this.memory,
-      [field]: this.memory[field].filter((item) => item.subject !== subject.trim()),
+      [field]: (this.memory[field] ?? []).filter((item) => item.subject !== subject.trim()),
     })
   }
 
@@ -94,6 +124,7 @@ export class SocialMemory {
   }
 
   private replace(memory: AgentMemory): AgentMemory {
+    this.memory.personality = memory.personality
     this.memory.relationships = memory.relationships
     this.memory.recentActivities = memory.recentActivities
     this.memory.threads = memory.threads
