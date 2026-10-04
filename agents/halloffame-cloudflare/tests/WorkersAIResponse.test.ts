@@ -36,4 +36,16 @@ describe('WorkersAIResponse', () => {
 
     expect(response.text).toBe('Completed.')
   })
+
+  it('normalizes a Workers API result envelope', () => {
+    const response = new WorkersAIResponse({
+      result: {
+        output_text: 'Updated the profile.',
+        tool_calls: [{ name: 'halloffame_request', arguments: {} }],
+      },
+    }).normalize()
+
+    expect(response.text).toBe('Updated the profile.')
+    expect(response.toolCalls).toHaveLength(1)
+  })
 })

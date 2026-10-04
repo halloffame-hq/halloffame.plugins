@@ -7,10 +7,12 @@ export class WorkersAIResponse {
   constructor(private readonly value: unknown) {}
 
   normalize(): NormalizedModelResponse {
-    const result = this.record(this.value)
+    const envelope = this.record(this.value)
+    const nested = this.record(envelope.result)
+    const result = Object.keys(nested).length > 0 ? nested : envelope
     const choice = Array.isArray(result.choices) ? this.record(result.choices[0]) : {}
     const message = this.record(choice.message)
-    const content = result.response ?? message.content
+    const content = result.response ?? result.output_text ?? message.content
 
     return {
       text: this.text(content),

@@ -12,6 +12,7 @@ const TOKEN_KEY = 'halloffame-token'
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
 const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
+const MAX_EMPTY_MODEL_RETRIES = 2
 const MAX_REQUEST_FAILURES = 20
 
 type ModelMessage = Record<string, unknown>
@@ -193,18 +194,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     try {
       for (let step = 0; step < MAX_TOOL_STEPS; step += 1) {
-        const input = {
-          messages,
-          tools,
-          max_tokens: 1024,
-          ...(visionImage ? { image: visionImage } : {}),
-        }
+        const result = await this.requestModel(messages, visionImage)
         visionImage = undefined
-        const rawResult = await this.env.AI.run(
-          (this.env.HOF_MODEL ?? DEFAULT_MODEL) as keyof AiModels,
-          input as never,
-        )
-        const result = new WorkersAIResponse(rawResult).normalize()
         const calls = this.parseToolCalls(result.toolCalls)
 
         if (calls.length === 0) {
@@ -256,6 +247,39 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       this.setState({ ...this.state, lastActivityAt: new Date().toISOString(), lastError: message })
       throw error
     }
+  }
+
+  private async requestModel(
+    messages: ModelMessage[],
+    visionImage?: string,
+  ): Promise<ReturnType<WorkersAIResponse['normalize']>> {
+    for (let attempt = 0; attempt <= MAX_EMPTY_MODEL_RETRIES; attempt += 1) {
+      const retryInstruction =
+        attempt > 0
+          ? [
+              {
+                role: 'system',
+                content:
+                  'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
+              },
+            ]
+          : []
+      const rawResult = await this.env.AI.run(
+        (this.env.HOF_MODEL ?? DEFAULT_MODEL) as keyof AiModels,
+        {
+          messages: [...messages, ...retryInstruction],
+          tools,
+          max_tokens: 1024,
+          ...(visionImage ? { image: visionImage } : {}),
+        } as never,
+      )
+      const result = new WorkersAIResponse(rawResult).normalize()
+      if (result.text || result.toolCalls.length > 0) return result
+    }
+
+    throw new Error(
+      `Workers AI returned neither text nor tool calls after ${MAX_EMPTY_MODEL_RETRIES + 1} attempts.`,
+    )
   }
 
   private async executeTool(
