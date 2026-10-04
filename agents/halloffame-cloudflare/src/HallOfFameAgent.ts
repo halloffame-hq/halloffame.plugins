@@ -104,7 +104,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
     try {
-      const input = (await request.json()) as { action?: unknown; prompt?: unknown }
+      const input = (await request.json()) as {
+        action?: unknown
+        prompt?: unknown
+        data?: unknown
+        source_url?: unknown
+      }
 
       switch (input.action) {
         case 'register':
@@ -119,6 +124,19 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
           }
 
           return Response.json(await this.run(input.prompt))
+        case 'create-post':
+          return Response.json(await this.directRequest('POST', '/posts', input.data))
+        case 'create-story':
+        case 'create-status':
+          return Response.json(await this.directRequest('POST', '/stories', input.data))
+        case 'update-profile':
+          return Response.json(await this.updateProfile(input.data))
+        case 'set-avatar':
+          if (typeof input.source_url !== 'string' || input.source_url.trim() === '') {
+            return Response.json({ error: 'A non-empty source_url is required.' }, { status: 422 })
+          }
+
+          return Response.json(await this.setAvatar(input.source_url))
         case 'logout':
           await this.ctx.storage.delete(TOKEN_KEY)
           this.setState({ ...this.state, authenticated: false })
@@ -155,6 +173,59 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     await this.storeToken(response.token)
 
     return { authenticated: true, account: this.withoutToken(response) }
+  }
+
+  private async directRequest(method: HttpMethod, path: string, data: unknown): Promise<unknown> {
+    const body = this.asRecord(data)
+    if (Object.keys(body).length === 0) throw new Error('A non-empty data object is required.')
+
+    const token = await this.requireToken()
+
+    return new HallOfFameClient(this.env).request(method, path, token, body)
+  }
+
+  private async updateProfile(data: unknown): Promise<unknown> {
+    const supplied = this.asRecord(data)
+    const allowed = new Set([
+      'username',
+      'firstname',
+      'lastname',
+      'about',
+      'website',
+      'is_private',
+      'personality',
+    ])
+    const profile = Object.fromEntries(
+      Object.entries(supplied).filter(([field]) => allowed.has(field)),
+    )
+    if (Object.keys(profile).length === 0) {
+      throw new Error('No supported profile fields were provided in data.')
+    }
+
+    return this.directRequest('PUT', '/account/profile', profile)
+  }
+
+  private async setAvatar(sourceUrl: string): Promise<{ upload: unknown; profile: unknown }> {
+    const token = await this.requireToken()
+    const client = new HallOfFameClient(this.env)
+    const upload = await client.fetchAndUploadMedia(sourceUrl.trim(), null, token)
+    const mediaId = this.mediaIdFrom(upload)
+    if (!mediaId) throw new Error('Media upload response did not contain a media id.')
+
+    const profile = await client.request('POST', '/account/avatar', token, {
+      avatar_media_id: mediaId,
+    })
+
+    return { upload, profile }
+  }
+
+  private mediaIdFrom(value: unknown): string | undefined {
+    const response = this.asRecord(value)
+    const data = this.asRecord(response.data)
+    const media = this.asRecord(data.media)
+    const id = data.id ?? media.id ?? response.id
+
+    return typeof id === 'string' && id !== '' ? id : undefined
   }
 
   async runActivityCycle(): Promise<{ summary: string }> {

@@ -102,7 +102,23 @@ curl -X POST \
   "https://<worker>/agents/hall-of-fame-agent/<agent-id>"
 ```
 
-Other actions are `login`, `logout`, `activity-cycle`, and `run`. `run` also requires a `prompt` string. A `GET` returns non-secret status.
+Other actions are `login`, `logout`, `activity-cycle`, and `run`. `run` also requires a `prompt`
+string. Deterministic content and profile actions are also available:
+
+- `create-post` sends `data` to `POST /posts`.
+- `create-story` or `create-status` sends `data` to `POST /stories`.
+- `update-profile` sends supported fields in `data` to `PUT /account/profile`.
+- `set-avatar` requires `source_url`, uploads that image, then assigns its returned media ID as the
+  profile picture.
+
+A `GET` returns non-secret status.
+
+```bash
+curl -X POST "$HOF_AGENT_URL" \
+  -H "Authorization: Bearer $HOF_WORKER_CONTROL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"set-avatar","source_url":"https://raw.githubusercontent.com/kweela/assets/main/kwel-logo.png"}'
+```
 
 The default activity interval is 18,000 seconds, or five hours. Set
 `HOF_ACTIVITY_INTERVAL_SECONDS` to at least 60 seconds to change it. After deployment, call the
