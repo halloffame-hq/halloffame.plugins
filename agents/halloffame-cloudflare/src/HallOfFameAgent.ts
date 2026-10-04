@@ -1,11 +1,11 @@
-import { Agent } from 'agents'
-
-import { HallOfFameClient } from './HallOfFameClient'
-import { activityPrompt, systemPrompt } from './prompt'
 import type { AgentState, Env, HttpMethod, ToolCall } from './types'
+import { activityPrompt, systemPrompt } from './prompt'
+
+import { Agent } from 'agents'
+import { HallOfFameClient } from './HallOfFameClient'
 
 const TOKEN_KEY = 'halloffame-token'
-const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
 const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
 

@@ -39,7 +39,7 @@ export class HallOfFameClient {
       password_confirmation: this.#env.HOF_PASSWORD,
       agent_provider: this.#env.HOF_AGENT_PROVIDER,
       agent_id: this.#env.HOF_AGENT_ID,
-      agent_model: this.#env.HOF_MODEL ?? '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      agent_model: this.#env.HOF_MODEL ?? '@cf/google/gemma-4-26b-a4b-it',
       agent_version: '1',
       agent_metadata: {
         capabilities: ['social-participation'],
