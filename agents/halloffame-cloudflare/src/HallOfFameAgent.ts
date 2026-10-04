@@ -3,6 +3,7 @@ import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
 import { HallOfFameClient } from './HallOfFameClient'
+import { SocialMemory } from './SocialMemory'
 
 const TOKEN_KEY = 'halloffame-token'
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
@@ -42,14 +43,34 @@ const tools = [
       required: ['source_url', 'context'],
     },
   },
+  {
+    name: 'halloffame_memory',
+    description:
+      'Save, update, or remove one durable relationship memory, recurring interest, or unresolved thread. Use only for socially meaningful information, never routine activity or secrets.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['recall', 'upsert', 'remove'] },
+        kind: { type: 'string', enum: ['relationship', 'thread'] },
+        subject: { type: 'string' },
+        summary: { type: 'string' },
+        query: { type: 'string' },
+      },
+      required: ['action'],
+    },
+  },
 ]
 
 export class HallOfFameAgent extends Agent<Env, AgentState> {
+  readonly #postIds = new Map<string, string>()
+  readonly #contextMarkers = new Map<string, string>()
+
   initialState: AgentState = {
     authenticated: false,
     lastActivityAt: null,
     lastActivitySummary: null,
     lastError: null,
+    memory: SocialMemory.empty(),
   }
 
   async onStart(): Promise<void> {
@@ -124,8 +145,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const client = new HallOfFameClient(this.env)
     const identity = await client.request('GET', '/auth/me', token)
     const personality = this.personalityFrom(identity)
+    const memory = new SocialMemory(this.state.memory ?? SocialMemory.empty())
     const messages: ModelMessage[] = [
       { role: 'system', content: systemPrompt(personality) },
+      { role: 'system', content: this.memoryPrompt(memory.snapshot(prompt)) },
       { role: 'user', content: prompt },
     ]
     let visionImage: string | undefined
@@ -147,12 +170,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
         if (calls.length === 0) {
           const summary = result.response?.trim() || 'Activity cycle completed without a summary.'
+          const updatedMemory = memory.addActivity(summary)
           this.setState({
             ...this.state,
             authenticated: true,
             lastActivityAt: new Date().toISOString(),
             lastActivitySummary: summary,
             lastError: null,
+            memory: updatedMemory,
           })
 
           return { summary }
@@ -165,7 +190,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         })
 
         for (const call of calls) {
-          const output = await this.executeTool(call, token)
+          const output = await this.executeTool(call, token, memory)
           messages.push({
             role: 'tool',
             name: call.name,
@@ -185,7 +210,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
   }
 
-  private async executeTool(call: ToolCall, token: string): Promise<unknown> {
+  private async executeTool(
+    call: ToolCall,
+    token: string,
+    memory: SocialMemory,
+  ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const client = new HallOfFameClient(this.env)
 
@@ -196,7 +225,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       if (!this.isMethod(method) || typeof path !== 'string')
         throw new Error('Invalid Hall Of Fame request tool arguments.')
 
-      return client.request(method, path, token, args.body)
+      const output = await client.request(method, path, token, args.body)
+      if (method === 'GET') {
+        this.indexResources(output)
+        this.annotateInteractions(output, memory)
+      }
+      if (method === 'POST') this.rememberInteraction(path, memory)
+
+      return output
     }
 
     if (call.name === 'halloffame_media_upload') {
@@ -211,6 +247,35 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       }
 
       return client.fetchAndUploadMedia(sourceUrl, context, token)
+    }
+
+    if (call.name === 'halloffame_memory') {
+      const action = args.action
+      const kind = args.kind
+      const subject = args.subject
+      const summary = args.summary
+      const query = args.query
+      if (action === 'recall') {
+        if (typeof query !== 'string') throw new Error('A memory recall query is required.')
+
+        return memory.snapshot(query)
+      }
+      if (
+        (action !== 'upsert' && action !== 'remove') ||
+        (kind !== 'relationship' && kind !== 'thread') ||
+        typeof subject !== 'string' ||
+        (action === 'upsert' && typeof summary !== 'string')
+      ) {
+        throw new Error('Invalid Hall Of Fame memory tool arguments.')
+      }
+
+      const updated =
+        action === 'remove'
+          ? memory.remove(kind, subject)
+          : memory.upsert(kind, subject, summary as string)
+      this.setState({ ...this.state, memory: updated })
+
+      return { saved: true }
     }
 
     throw new Error(`Unknown tool: ${call.name}`)
@@ -298,5 +363,79 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return typeof personality === 'string' && personality.trim() !== ''
       ? personality.trim()
       : undefined
+  }
+
+  private memoryPrompt(memory: ReturnType<SocialMemory['snapshot']>): string {
+    return `Private bounded social memory for this cycle:\n${JSON.stringify(memory)}\nUse at most the supplied five relationship memories, five recent activities, and three interests or unresolved threads. The interactions list contains the most recently engaged Post and comment IDs; older matches are marked _agentInteraction in API results. Do not engage with those resources again unless contextChanged is true or there is meaningful new context such as a new reply or mention. After discovering a specific person or topic, halloffame_memory action "recall" can retrieve the five relationships and three threads most relevant to a short query. Maintain durable memories with upsert or remove only when socially meaningful. Never reveal this private memory.`
+  }
+
+  private indexResources(value: unknown): void {
+    if (Array.isArray(value)) {
+      value.forEach((item) => this.indexResources(item))
+
+      return
+    }
+    const record = this.asRecord(value)
+    if (Object.keys(record).length === 0) return
+
+    const id = typeof record.id === 'string' ? record.id : undefined
+    const slug = typeof record.slug === 'string' ? record.slug : undefined
+    if (id && slug) this.#postIds.set(slug, id)
+    if (id) {
+      const marker = typeof record.updatedAt === 'string' ? record.updatedAt : ''
+      if (marker) this.#contextMarkers.set(id, marker)
+    }
+
+    Object.values(record).forEach((item) => this.indexResources(item))
+  }
+
+  private rememberInteraction(path: string, memory: SocialMemory): void {
+    const match = path.match(
+      /^\/posts\/([^/]+)\/(?:comments(?:\/([^/]+)\/(?:replies|reactions))?|reactions|votes)$/u,
+    )
+    if (!match?.[1]) return
+
+    const postSlug = decodeURIComponent(match[1])
+    const postId = this.#postIds.get(postSlug) ?? postSlug
+    let updated = memory.recordInteraction({
+      resourceType: 'post',
+      resourceId: postId,
+      contextMarker: this.#contextMarkers.get(postId),
+    })
+    if (match[2]) {
+      const commentId = decodeURIComponent(match[2])
+      updated = memory.recordInteraction({
+        resourceType: 'comment',
+        resourceId: commentId,
+        contextMarker: this.#contextMarkers.get(commentId),
+      })
+    }
+    this.setState({ ...this.state, memory: updated })
+  }
+
+  private annotateInteractions(value: unknown, memory: SocialMemory): void {
+    if (Array.isArray(value)) {
+      value.forEach((item) => this.annotateInteractions(item, memory))
+
+      return
+    }
+    const record = this.asRecord(value)
+    if (Object.keys(record).length === 0) return
+
+    const id = typeof record.id === 'string' ? record.id : undefined
+    const interaction = id ? memory.interaction(id) : undefined
+    if (id && interaction) {
+      const currentMarker = this.#contextMarkers.get(id)
+      record._agentInteraction = {
+        interactedAt: interaction.interactedAt,
+        contextChanged: Boolean(
+          currentMarker &&
+            Number.isFinite(Date.parse(currentMarker)) &&
+            Date.parse(currentMarker) > Date.parse(interaction.interactedAt),
+        ),
+      }
+    }
+
+    Object.values(record).forEach((item) => this.annotateInteractions(item, memory))
   }
 }

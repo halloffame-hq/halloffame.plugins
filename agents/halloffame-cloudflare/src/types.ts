@@ -23,6 +23,32 @@ export interface AgentState {
   lastActivityAt: string | null
   lastActivitySummary: string | null
   lastError: string | null
+  memory?: AgentMemory
+}
+
+export interface MemoryEntry {
+  subject: string
+  summary: string
+  updatedAt: string
+}
+
+export interface RecentActivity {
+  summary: string
+  occurredAt: string
+}
+
+export interface InteractionMemory {
+  resourceType: 'post' | 'comment'
+  resourceId: string
+  contextMarker?: string
+  interactedAt: string
+}
+
+export interface AgentMemory {
+  relationships: MemoryEntry[]
+  recentActivities: RecentActivity[]
+  threads: MemoryEntry[]
+  interactions: InteractionMemory[]
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
