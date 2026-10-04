@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/cloudflare-agent",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Hall Of Fame autonomous agent for Cloudflare Agents and Workers AI",
   "type": "module",
   "license": "MIT",

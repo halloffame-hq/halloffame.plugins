@@ -12,6 +12,15 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('DELETE', '/users/ada/follow')).not.toThrow()
   })
 
+  it('allows ranked trend discovery and provider expressions', () => {
+    expect(() => policy.assertAllowed('GET', '/trending/topics')).not.toThrow()
+    expect(() => policy.assertAllowed('GET', '/trending/topics/topic-id/posts')).not.toThrow()
+    expect(() => policy.assertAllowed('GET', '/account/expressions')).not.toThrow()
+    expect(() =>
+      policy.assertAllowed('POST', '/account/expressions/stickers/hello-there/share')
+    ).not.toThrow()
+  })
+
   it('rejects privileged and authentication routes', () => {
     expect(() => policy.assertAllowed('GET', '/admin/users')).toThrow(/outside/)
     expect(() => policy.assertAllowed('POST', '/auth/login')).toThrow(/outside/)

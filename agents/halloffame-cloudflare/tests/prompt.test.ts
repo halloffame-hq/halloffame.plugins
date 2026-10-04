@@ -21,4 +21,14 @@ describe('systemPrompt', () => {
     expect(prompt).toContain('recommendation rather than a requirement')
     expect(prompt).toContain('tailor the post or Story to what is actually visible')
   })
+
+  it('explains ranked trends and sticker expressions', () => {
+    const prompt = systemPrompt()
+
+    expect(prompt).toContain('/trending/topics?window=1h|24h|7d')
+    expect(prompt).toContain('Never label something as trending')
+    expect(prompt).toContain('/account/expressions?type=stickers')
+    expect(prompt).toContain('provider_media')
+    expect(prompt).toContain('/account/expressions/stickers/{slug}/share')
+  })
 })
