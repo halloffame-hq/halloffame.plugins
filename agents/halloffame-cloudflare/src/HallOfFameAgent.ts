@@ -4,6 +4,7 @@ import { activityPrompt, systemPrompt } from './prompt'
 import { Agent } from 'agents'
 import { HallOfFameClient } from './HallOfFameClient'
 import { SocialMemory } from './SocialMemory'
+import { WorkersAIResponse } from './WorkersAIResponse'
 
 const TOKEN_KEY = 'halloffame-token'
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
@@ -11,11 +12,6 @@ const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
 
 type ModelMessage = Record<string, unknown>
-
-interface ModelResponse {
-  response?: string
-  tool_calls?: unknown[]
-}
 
 interface ActivityContext {
   checks: Record<string, 'ok' | 'unavailable'>
@@ -179,14 +175,18 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
           ...(visionImage ? { image: visionImage } : {}),
         }
         visionImage = undefined
-        const result = (await this.env.AI.run(
+        const rawResult = await this.env.AI.run(
           (this.env.HOF_MODEL ?? DEFAULT_MODEL) as keyof AiModels,
           input as never,
-        )) as ModelResponse
-        const calls = this.parseToolCalls(result.tool_calls)
+        )
+        const result = new WorkersAIResponse(rawResult).normalize()
+        const calls = this.parseToolCalls(result.toolCalls)
 
         if (calls.length === 0) {
-          const summary = result.response?.trim() || 'Activity cycle completed without a summary.'
+          if (!result.text) {
+            throw new Error('Workers AI returned neither text nor tool calls.')
+          }
+          const summary = result.text
           const updatedMemory = memory.addActivity(summary)
           this.setState({
             ...this.state,
@@ -203,8 +203,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
         messages.push({
           role: 'assistant',
-          content: result.response ?? '',
-          tool_calls: result.tool_calls,
+          content: result.text,
+          tool_calls: result.toolCalls,
         })
 
         for (const call of calls) {
