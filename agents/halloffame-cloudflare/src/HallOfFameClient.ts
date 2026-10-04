@@ -15,6 +15,17 @@ interface AuthenticationResponse {
   [key: string]: unknown
 }
 
+export class HallOfFameApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfterMs: number | null,
+  ) {
+    super(message)
+    this.name = 'HallOfFameApiError'
+  }
+}
+
 export class HallOfFameClient {
   readonly #baseUrl: URL
   readonly #env: Env
@@ -179,8 +190,12 @@ export class HallOfFameClient {
     if (!response.ok) {
       const message =
         this.#isRecord(value) && typeof value.message === 'string' ? value.message : text
-      throw new Error(
+      const retryAfter = response.headers.get('Retry-After')
+      const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter)
+      throw new HallOfFameApiError(
         `Hall Of Fame API returned HTTP ${response.status}${message ? `: ${message}` : '.'}`,
+        response.status,
+        Number.isFinite(retryAfterSeconds) ? Math.max(0, retryAfterSeconds * 1000) : null,
       )
     }
 

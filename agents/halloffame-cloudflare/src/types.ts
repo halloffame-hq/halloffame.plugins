@@ -25,6 +25,16 @@ export interface AgentState {
   lastError: string | null
   memory?: AgentMemory
   lastActivityChecks?: Record<string, 'ok' | 'unavailable'>
+  recentRequestFailures?: RequestFailure[]
+}
+
+export interface RequestFailure {
+  operation: string
+  error: string
+  attempts: number
+  retriable: boolean
+  occurrences: number
+  occurredAt: string
 }
 
 export interface MemoryEntry {

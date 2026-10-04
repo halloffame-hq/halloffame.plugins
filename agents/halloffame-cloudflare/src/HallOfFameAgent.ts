@@ -1,4 +1,4 @@
-import type { AgentState, Env, HttpMethod, ToolCall } from './types'
+import type { AgentState, Env, HttpMethod, RequestFailure, ToolCall } from './types'
 import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
@@ -6,11 +6,13 @@ import { HallOfFameClient } from './HallOfFameClient'
 import { SocialMemory } from './SocialMemory'
 import { WorkersAIResponse } from './WorkersAIResponse'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
+import { RequestRetryPolicy } from './RequestRetryPolicy'
 
 const TOKEN_KEY = 'halloffame-token'
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
 const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
+const MAX_REQUEST_FAILURES = 20
 
 type ModelMessage = Record<string, unknown>
 
@@ -73,6 +75,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   readonly #postSlugs = new Map<string, string>()
   readonly #contextMarkers = new Map<string, string>()
   readonly #bodyNormalizer = new RequestBodyNormalizer()
+  readonly #retryPolicy = new RequestRetryPolicy()
 
   initialState: AgentState = {
     authenticated: false,
@@ -81,6 +84,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     lastError: null,
     memory: SocialMemory.empty(),
     lastActivityChecks: {},
+    recentRequestFailures: [],
   }
 
   async onStart(): Promise<void> {
@@ -131,7 +135,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   async scheduledActivityCycle(): Promise<void> {
-    await this.runActivityCycle()
+    try {
+      await this.runActivityCycle()
+    } catch {
+      // The cycle records its error and the recurring schedule remains available for the next run.
+    }
   }
 
   async register(): Promise<{ authenticated: true; account: unknown }> {
@@ -322,16 +330,28 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     token: string,
     memory: SocialMemory,
   ): Promise<unknown> {
-    try {
-      return await this.executeTool(call, token, memory)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown Hall Of Fame tool error.'
+    const args = this.asRecord(call.arguments)
+    const method = this.isMethod(args.method) ? args.method : 'POST'
+    let lastError: unknown
 
-      return {
-        error: message,
-        recoverable: !/HTTP (?:401|402|403|429)\b/u.test(message),
+    for (let attempt = 1; attempt <= this.#retryPolicy.maxAttempts; attempt += 1) {
+      try {
+        return await this.executeTool(call, token, memory)
+      } catch (error) {
+        lastError = error
+        const retriable = this.#retryPolicy.isRetriable(error, method)
+        if (!retriable || attempt === this.#retryPolicy.maxAttempts) {
+          const message = this.errorMessage(error)
+          this.recordRequestFailure(`${method} ${String(args.path ?? call.name)}`, message, attempt, retriable)
+
+          return { error: message, retriable, attempts: attempt }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, this.#retryPolicy.delay(error, attempt)))
       }
     }
+
+    return { error: this.errorMessage(lastError), retriable: false }
   }
 
   private parseToolCalls(input: unknown[] | undefined): ToolCall[] {
@@ -431,7 +451,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {
         try {
-          const value = await client.request('GET', path, token)
+          const value = await this.requestWithRetry(client, 'GET', path, token)
           this.indexResources(value)
           this.annotateInteractions(value, memory)
 
@@ -455,6 +475,78 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       checks: Object.fromEntries(entries.map(([name, result]) => [name, result.status])),
       data: Object.fromEntries(entries.map(([name, result]) => [name, result.value])),
     }
+  }
+
+  private async requestWithRetry(
+    client: HallOfFameClient,
+    method: HttpMethod,
+    path: string,
+    token: string,
+  ): Promise<unknown> {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= this.#retryPolicy.maxAttempts; attempt += 1) {
+      try {
+        return await client.request(method, path, token)
+      } catch (error) {
+        lastError = error
+        const retriable = this.#retryPolicy.isRetriable(error, method)
+        if (!retriable || attempt === this.#retryPolicy.maxAttempts) {
+          this.recordRequestFailure(`${method} ${path}`, this.errorMessage(error), attempt, retriable)
+          throw error
+        }
+        await new Promise((resolve) => setTimeout(resolve, this.#retryPolicy.delay(error, attempt)))
+      }
+    }
+
+    throw lastError
+  }
+
+  private recordRequestFailure(
+    operation: string,
+    error: string,
+    attempts: number,
+    retriable: boolean,
+  ): void {
+    const failures = this.state.recentRequestFailures ?? []
+    const matchingIndex = failures.findIndex(
+      (failure) =>
+        !retriable &&
+        !failure.retriable &&
+        failure.operation === operation &&
+        failure.error === error,
+    )
+    const matchingFailure = matchingIndex >= 0 ? failures[matchingIndex] : undefined
+    const occurrences = matchingFailure ? (matchingFailure.occurrences ?? 1) + 1 : 1
+    if (!retriable && occurrences >= 3) {
+      this.setState({
+        ...this.state,
+        recentRequestFailures: failures.filter((_, index) => index !== matchingIndex),
+      })
+
+      return
+    }
+
+    const failure: RequestFailure = {
+      operation,
+      error,
+      attempts,
+      retriable,
+      occurrences,
+      occurredAt: new Date().toISOString(),
+    }
+    const retained =
+      matchingIndex >= 0
+        ? failures.filter((_, index) => index !== matchingIndex)
+        : failures
+    this.setState({
+      ...this.state,
+      recentRequestFailures: [...retained, failure].slice(-MAX_REQUEST_FAILURES),
+    })
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Unknown Hall Of Fame request error.'
   }
 
   private memoryPrompt(memory: ReturnType<SocialMemory['snapshot']>): string {
