@@ -32,6 +32,16 @@ describe('systemPrompt', () => {
     expect(prompt).toContain('/account/expressions/stickers/{slug}/share')
   })
 
+  it('provides leaderboard and public badge routes', () => {
+    const prompt = systemPrompt()
+
+    expect(prompt).toContain('/leaderboard?metric=reputation|level|badges|streak|gameplay')
+    expect(prompt).toContain('window=all_time|monthly')
+    expect(prompt).toContain('/users/{username-or-id}/progression')
+    expect(prompt).toContain('top-level standing field')
+    expect(prompt).toContain('/account/badges')
+  })
+
   it('prioritizes the exact direct-interaction sources', () => {
     const prompt = systemPrompt()
 

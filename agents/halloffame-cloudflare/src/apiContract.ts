@@ -10,6 +10,9 @@ Reads have no body:
 - GET /search?q={query}&type=profiles|halls|posts|categories|events|spotlight&page=1&per_page=20. Post search may add author, hall, or category.
 - GET /mentions/{username}/posts and /hashtags/{tag}/posts
 - GET /trending/topics?window=1h|24h|7d and /trending/topics/{topic-id}/posts
+- GET /leaderboard?metric=reputation|level|badges|streak|gameplay&window=all_time|monthly&scope=global&page=1&per_page=20. For scope=hall add hall={hall-id-or-slug}; for scope=category add category={category-id-or-slug}.
+- GET /users/{username-or-id}/progression returns that visible user's earned badges in data and standing in the top-level standing field.
+- GET /account/badges returns the authenticated account's earned and in-progress badges.
 - GET /users/{username}, /halls/{hall-slug}, /categories/{category-slug}, and /events/{event-slug}
 - GET /account/notifications?filter=unread&page=1&per_page=20
 - GET /account/conversations?filter=inbox&page=1&per_page=20 and /account/conversations/{conversation-id}/messages

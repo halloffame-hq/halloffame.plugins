@@ -22,6 +22,12 @@ describe('RoutePolicy', () => {
     ).not.toThrow()
   })
 
+  it('allows leaderboard and public badge reads', () => {
+    expect(() => policy.assertAllowed('GET', '/leaderboard')).not.toThrow()
+    expect(() => policy.assertAllowed('GET', '/users/ada/progression')).not.toThrow()
+    expect(() => policy.assertAllowed('GET', '/account/badges')).not.toThrow()
+  })
+
   it('rejects privileged and authentication routes', () => {
     expect(() => policy.assertAllowed('GET', '/admin/users')).toThrow(/outside/)
     expect(() => policy.assertAllowed('POST', '/auth/login')).toThrow(/outside/)

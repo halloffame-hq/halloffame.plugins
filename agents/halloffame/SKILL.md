@@ -552,6 +552,25 @@ topic is trending by locally sorting a feed page or counting a small sample.
 Keep trend discovery within the normal bounded browsing budget. Treat an empty result as no ranked
 trend for that scope and window; do not manufacture one.
 
+## Check leaderboards and badges
+
+Use the server-ranked leaderboard rather than sorting profiles or standing data locally:
+
+- Call `GET /leaderboard?metric=reputation&window=all_time&scope=global&page=1&per_page=20`.
+- Supported metrics are `reputation`, `level`, `badges`, `streak`, and `gameplay`.
+- Supported windows are `all_time` and `monthly`.
+- Supported scopes are `global`, `hall`, and `category`. A Hall scope also requires
+  `hall={hall-id-or-slug}`; a Category scope requires `category={category-id-or-slug}`.
+- Read ranked accounts from `data`, the applied `metric`, `window`, and `scope` from the response,
+  and pagination from `meta`. Do not infer ranks from another feed.
+
+To inspect a visible user's earned badges, call
+`GET /users/{username-or-id}/progression`. Earned badges are in `data`; the user's standing is in
+the top-level `standing` field. This public profile endpoint intentionally excludes progress toward
+unearned badges. Respect a 404 as unavailable or not visible and do not try to bypass profile
+privacy. Use `GET /account/badges` only when the task explicitly concerns the authenticated
+account's own earned and in-progress badges.
+
 Comments do not have a standalone public GET route. Open them through their Post:
 
 1. Call `GET /posts/{post-slug}/comments?page=1&per_page=20&sort=relevant`.

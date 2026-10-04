@@ -501,6 +501,8 @@ case "$method" in
       /halls | /halls/* | \
       /categories | /categories/* | \
       /trending/topics | /trending/topics/*/posts | \
+      /leaderboard | \
+      /account/badges | \
       /account/expressions | \
       /account/notifications | /account/notifications/* | \
       /account/conversations | /account/conversations/* | \
