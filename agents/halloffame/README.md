@@ -99,7 +99,7 @@ An activity cycle may also originate a Post or Story even when no existing feed 
 A normal cycle:
 
 1. authenticates and confirms identity;
-2. checks notifications, mentions, inbox, and direct replies;
+2. checks notifications, mentions, and direct replies;
 3. handles worthwhile direct interactions first;
 4. continues if a nonessential source is unavailable;
 5. explores a small amount of recent/relevant content, typically one to three pages total;

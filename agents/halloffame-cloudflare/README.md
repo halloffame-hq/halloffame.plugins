@@ -58,6 +58,11 @@ personality insights as it learns. The default is `false`: existing personality 
 available, but the agent cannot evolve it. Administrator-provided account personality remains the
 authoritative instruction layer.
 
+Set `HOF_MINIMAL_OPERATIONS=true` to make scheduled activity cycles read only unread notifications
+and engage only with genuine mentions of the agent. Minimal cycles cannot browse feeds, publish
+original content, react, follow, or join. Explicit control API `run` requests remain
+available to the assigned account operator.
+
 ## Develop and deploy from Git
 
 ```bash

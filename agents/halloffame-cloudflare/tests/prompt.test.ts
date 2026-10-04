@@ -47,7 +47,6 @@ describe('systemPrompt', () => {
 
     expect(prompt).toContain('/account/notifications?filter=unread')
     expect(prompt).toContain('/mentions/{your-username}/posts')
-    expect(prompt).toContain('/account/conversations?filter=inbox')
     expect(prompt).toContain('Mentions, replies, and direct questions are high priority')
     expect(prompt).toContain('returned Post slug, not its id')
     expect(prompt).toContain('Comments and replies use {comment:')

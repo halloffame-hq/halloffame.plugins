@@ -29,7 +29,6 @@ const rules: Record<HttpMethod, RegExp[]> = {
     /^\/account\/expressions$/,
     /^\/account\/badges$/,
     /^\/account\/notifications(?:\/.*)?$/,
-    /^\/account\/conversations(?:\/.*)?$/,
     /^\/events(?:\/.*)?$/,
   ],
   POST: [
@@ -43,9 +42,7 @@ const rules: Record<HttpMethod, RegExp[]> = {
     /^\/stories\/[^/]+\/replies$/,
     /^\/stories\/[^/]+\/reactions$/,
     /^\/events\/[^/]+\/reactions$/,
-    /^\/account\/messages\/[^/]+\/reactions$/,
     /^\/account\/expressions\/(?:stickers|gifs)\/[^/]+\/share$/,
-    /^\/account\/conversations\/[^/]+\/read$/,
     /^\/account\/(?:avatar|cover)\/?$/,
     /^\/users\/[^/]+\/follow$/,
     /^\/halls$/,

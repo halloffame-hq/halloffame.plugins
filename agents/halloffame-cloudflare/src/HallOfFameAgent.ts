@@ -3,10 +3,10 @@ import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
 import { HallOfFameClient } from './HallOfFameClient'
-import { SocialMemory } from './SocialMemory'
-import { WorkersAIResponse } from './WorkersAIResponse'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
+import { SocialMemory } from './SocialMemory'
+import { WorkersAIResponse } from './WorkersAIResponse'
 
 const TOKEN_KEY = 'halloffame-token'
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it'
@@ -168,6 +168,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const identity = await client.request('GET', '/auth/me', token)
     const personality = this.personalityFrom(identity)
     const memory = new SocialMemory(this.state.memory ?? SocialMemory.empty())
+    const minimalCycle = preloadActivity && this.minimalOperationsEnabled()
     const activityContext = preloadActivity
       ? await this.loadActivityContext(client, token, memory)
       : undefined
@@ -184,7 +185,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       {
         role: 'user',
         content: activityContext
-          ? `${prompt}\n\nPreloaded direct-interaction sources:\n${JSON.stringify(activityContext.data)}`
+          ? `${prompt}\n\nMinimal operations: ${minimalCycle ? 'enabled' : 'disabled'}.\nPreloaded direct-interaction sources:\n${JSON.stringify(activityContext.data)}`
           : prompt,
       },
     ]
@@ -232,7 +233,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         })
 
         for (const call of calls) {
-          const output = await this.executeToolSafely(call, token, memory)
+          const output = await this.executeToolSafely(
+            call,
+            token,
+            memory,
+            minimalCycle,
+          )
           messages.push({
             role: 'tool',
             name: call.name,
@@ -256,6 +262,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     call: ToolCall,
     token: string,
     memory: SocialMemory,
+    minimalCycle = false,
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const client = new HallOfFameClient(this.env)
@@ -266,6 +273,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
       if (!this.isMethod(method) || typeof path !== 'string')
         throw new Error('Invalid Hall Of Fame request tool arguments.')
+
+      if (minimalCycle) this.assertMinimalCycleRequest(method, path)
 
       const resolvedPath = this.resolvePostPath(path)
       const body = this.#bodyNormalizer.normalize(resolvedPath, args.body)
@@ -332,6 +341,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     call: ToolCall,
     token: string,
     memory: SocialMemory,
+    minimalCycle = false,
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const method = this.isMethod(args.method) ? args.method : 'POST'
@@ -339,7 +349,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     for (let attempt = 1; attempt <= this.#retryPolicy.maxAttempts; attempt += 1) {
       try {
-        return await this.executeTool(call, token, memory)
+        return await this.executeTool(call, token, memory, minimalCycle)
       } catch (error) {
         lastError = error
         const retriable = this.#retryPolicy.isRetriable(error, method)
@@ -446,11 +456,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     token: string,
     memory: SocialMemory,
   ): Promise<ActivityContext> {
-    const sources = {
-      unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-      mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
-      inbox: '/account/conversations?filter=inbox&page=1&per_page=20',
-    }
+    const sources = this.minimalOperationsEnabled()
+      ? {
+        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+      }
+      : {
+        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+        mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+      }
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {
         try {
@@ -458,7 +471,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
           this.indexResources(value)
           this.annotateInteractions(value, memory)
 
-          return [name, { status: 'ok' as const, value }] as const
+          return [
+            name,
+            { status: 'ok' as const, value },
+          ] as const
         } catch (error) {
           return [
             name,
@@ -564,6 +580,25 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return this.env.HOF_PERSONALITY_LEARNING_ENABLED?.trim().toLowerCase() === 'true'
   }
 
+  private minimalOperationsEnabled(): boolean {
+    return this.env.HOF_MINIMAL_OPERATIONS?.trim().toLowerCase() === 'true'
+  }
+
+  private assertMinimalCycleRequest(method: HttpMethod, path: string): void {
+    const allowed =
+      (method === 'GET' &&
+        (/^\/posts\/[^/?]+(?:\/comments(?:\/[^/?]+\/replies)?)?(?:\?.*)?$/u.test(path) ||
+          /^\/stories\/[^/?]+(?:\/replies)?(?:\?.*)?$/u.test(path))) ||
+      (method === 'POST' &&
+        (/^\/posts\/[^/?]+\/comments(?:\/[^/?]+\/replies)?$/u.test(path) ||
+          /^\/stories\/[^/?]+\/replies$/u.test(path))) ||
+      (method === 'PUT' && /^\/account\/notifications\/[^/?]+\/read$/u.test(path))
+
+    if (!allowed) {
+      throw new Error('This request is unavailable during a minimal operations activity cycle.')
+    }
+  }
+
   private indexResources(value: unknown): void {
     if (Array.isArray(value)) {
       value.forEach((item) => this.indexResources(item))
@@ -637,8 +672,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         interactedAt: interaction.interactedAt,
         contextChanged: Boolean(
           currentMarker &&
-            Number.isFinite(Date.parse(currentMarker)) &&
-            Date.parse(currentMarker) > Date.parse(interaction.interactedAt),
+          Number.isFinite(Date.parse(currentMarker)) &&
+          Date.parse(currentMarker) > Date.parse(interaction.interactedAt),
         ),
       }
     }

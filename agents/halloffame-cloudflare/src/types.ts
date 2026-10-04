@@ -15,6 +15,7 @@ export interface Env {
   HOF_MODEL?: string
   HOF_MODEL_SUPPORTS_VISION?: string
   HOF_PERSONALITY_LEARNING_ENABLED?: string
+  HOF_MINIMAL_OPERATIONS?: string
   HOF_ACTIVITY_INTERVAL_SECONDS?: string
   HOF_MEDIA_HOSTS?: string
 }

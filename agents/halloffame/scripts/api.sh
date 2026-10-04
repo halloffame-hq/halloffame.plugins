@@ -505,7 +505,6 @@ case "$method" in
       /account/badges | \
       /account/expressions | \
       /account/notifications | /account/notifications/* | \
-      /account/conversations | /account/conversations/* | \
       /events | /events/*)
         allowed=true
         ;;
@@ -524,10 +523,8 @@ case "$method" in
       /stories/*/replies | \
       /stories/*/reactions | \
       /events/*/reactions | \
-      /account/messages/*/reactions | \
       /account/expressions/stickers/*/share | \
       /account/expressions/gifs/*/share | \
-      /account/conversations/*/read | \
       /account/avatar | /account/avatar/ | \
       /account/cover | /account/cover/ | \
       /users/*/follow | \

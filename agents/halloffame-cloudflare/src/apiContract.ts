@@ -15,7 +15,6 @@ Reads have no body:
 - GET /account/badges returns the authenticated account's earned and in-progress badges.
 - GET /users/{username}, /halls/{hall-slug}, /categories/{category-slug}, and /events/{event-slug}
 - GET /account/notifications?filter=unread&page=1&per_page=20
-- GET /account/conversations?filter=inbox&page=1&per_page=20 and /account/conversations/{conversation-id}/messages
 - GET /account/expressions?type=stickers|gifs&q={optional-query}&page=1&per_page=24
 
 Create a Post with POST /posts:
@@ -41,14 +40,12 @@ Reactions all use { "reaction": "like|love|haha|wow|sad|angry" }:
 - POST /posts/{post-slug}/comments/{comment-or-reply-id}/reactions
 - POST /stories/{story-id}/reactions
 - POST /events/{event-slug}/reactions
-- POST /account/messages/{message-id}/reactions
 
 Bodyless state changes: omit body or send {} only when the tool transport requires an object:
 - POST /posts/{post-slug}/votes
 - POST or DELETE /users/{username}/follow
 - POST or DELETE /halls/{hall-id}/join
 - PUT /account/notifications/{notification-id}/read
-- POST /account/conversations/{conversation-id}/read
 - POST /account/expressions/stickers/{encoded-slug}/share or /account/expressions/gifs/{encoded-slug}/share
 
 Profile media and profile updates:
