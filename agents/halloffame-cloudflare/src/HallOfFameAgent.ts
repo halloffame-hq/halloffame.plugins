@@ -17,6 +17,11 @@ interface ModelResponse {
   tool_calls?: unknown[]
 }
 
+interface ActivityContext {
+  checks: Record<string, 'ok' | 'unavailable'>
+  data: Record<string, unknown>
+}
+
 const tools = [
   {
     name: 'halloffame_request',
@@ -71,6 +76,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     lastActivitySummary: null,
     lastError: null,
     memory: SocialMemory.empty(),
+    lastActivityChecks: {},
   }
 
   async onStart(): Promise<void> {
@@ -137,19 +143,30 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   async runActivityCycle(): Promise<{ summary: string }> {
     await this.login()
 
-    return this.run(activityPrompt)
+    return this.run(activityPrompt, true)
   }
 
-  async run(prompt: string): Promise<{ summary: string }> {
+  async run(prompt: string, preloadActivity = false): Promise<{ summary: string }> {
     const token = await this.requireToken()
     const client = new HallOfFameClient(this.env)
     const identity = await client.request('GET', '/auth/me', token)
     const personality = this.personalityFrom(identity)
     const memory = new SocialMemory(this.state.memory ?? SocialMemory.empty())
+    const activityContext = preloadActivity
+      ? await this.loadActivityContext(client, token, memory)
+      : undefined
+    if (activityContext) {
+      this.setState({ ...this.state, lastActivityChecks: activityContext.checks })
+    }
     const messages: ModelMessage[] = [
       { role: 'system', content: systemPrompt(personality) },
       { role: 'system', content: this.memoryPrompt(memory.snapshot(prompt)) },
-      { role: 'user', content: prompt },
+      {
+        role: 'user',
+        content: activityContext
+          ? `${prompt}\n\nPreloaded direct-interaction sources:\n${JSON.stringify(activityContext.data)}`
+          : prompt,
+      },
     ]
     let visionImage: string | undefined
 
@@ -178,6 +195,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
             lastActivitySummary: summary,
             lastError: null,
             memory: updatedMemory,
+            ...(activityContext ? { lastActivityChecks: activityContext.checks } : {}),
           })
 
           return { summary }
@@ -363,6 +381,45 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return typeof personality === 'string' && personality.trim() !== ''
       ? personality.trim()
       : undefined
+  }
+
+  private async loadActivityContext(
+    client: HallOfFameClient,
+    token: string,
+    memory: SocialMemory,
+  ): Promise<ActivityContext> {
+    const sources = {
+      unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=10',
+      mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=10`,
+      inbox: '/account/conversations?filter=inbox&page=1&per_page=10',
+    }
+    const entries = await Promise.all(
+      Object.entries(sources).map(async ([name, path]) => {
+        try {
+          const value = await client.request('GET', path, token)
+          this.indexResources(value)
+          this.annotateInteractions(value, memory)
+
+          return [name, { status: 'ok' as const, value }] as const
+        } catch (error) {
+          return [
+            name,
+            {
+              status: 'unavailable' as const,
+              value: {
+                unavailable: true,
+                error: error instanceof Error ? error.message : 'Unknown source error.',
+              },
+            },
+          ] as const
+        }
+      }),
+    )
+
+    return {
+      checks: Object.fromEntries(entries.map(([name, result]) => [name, result.status])),
+      data: Object.fromEntries(entries.map(([name, result]) => [name, result.value])),
+    }
   }
 
   private memoryPrompt(memory: ReturnType<SocialMemory['snapshot']>): string {

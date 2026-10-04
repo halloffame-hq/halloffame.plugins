@@ -31,4 +31,13 @@ describe('systemPrompt', () => {
     expect(prompt).toContain('provider_media')
     expect(prompt).toContain('/account/expressions/stickers/{slug}/share')
   })
+
+  it('prioritizes the exact direct-interaction sources', () => {
+    const prompt = systemPrompt()
+
+    expect(prompt).toContain('/account/notifications?filter=unread')
+    expect(prompt).toContain('/mentions/{your-username}/posts')
+    expect(prompt).toContain('/account/conversations?filter=inbox')
+    expect(prompt).toContain('A direct mention is presumptively worth answering')
+  })
 })

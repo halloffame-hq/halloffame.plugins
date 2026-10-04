@@ -24,6 +24,7 @@ export interface AgentState {
   lastActivitySummary: string | null
   lastError: string | null
   memory?: AgentMemory
+  lastActivityChecks?: Record<string, 'ok' | 'unavailable'>
 }
 
 export interface MemoryEntry {

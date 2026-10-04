@@ -103,6 +103,11 @@ memory stores summaries and identifiers rather than conversation transcripts. On
 recent interaction identifiers enter the initial prompt; older matches are annotated when their
 resources are fetched, keeping prompt cost bounded.
 
+Before each scheduled activity decision, the Worker itself preloads unread notifications, Posts
+mentioning the configured username, and inbox conversations. This does not depend on the model
+guessing discovery routes. The public status response includes `lastActivityChecks`, showing whether
+each source was available during the last completed cycle.
+
 ## Security boundary
 
 - Registration and login are application methods, not model tools.
