@@ -286,6 +286,51 @@ read_session_token() {
   fi
 }
 
+authenticated_request() {
+  local url=$1
+  shift
+
+  local attempt response_file http_status curl_status
+
+  for attempt in 1 2; do
+    read_session_token
+    response_file=$(mktemp "${TMPDIR:-/tmp}/halloffame-response.XXXXXX")
+    chmod 600 -- "$response_file"
+
+    http_status=$(
+      curl \
+        --silent \
+        --show-error \
+        --output "$response_file" \
+        --write-out '%{http_code}' \
+        --header "Authorization: Bearer ${token}" \
+        "$@" \
+        "$url"
+    )
+    curl_status=$?
+
+    if [[ $curl_status -ne 0 ]]; then
+      rm -f -- "$response_file"
+      return "$curl_status"
+    fi
+
+    if [[ $http_status == 401 && $attempt -eq 1 ]]; then
+      rm -f -- "$response_file"
+      login LOGIN >/dev/null || return $?
+      continue
+    fi
+
+    cat -- "$response_file"
+    rm -f -- "$response_file"
+
+    if [[ $http_status =~ ^[45][0-9][0-9]$ ]]; then
+      return 22
+    fi
+
+    return 0
+  done
+}
+
 prepare_media_dir() {
   if [[ -L $media_root ]]; then
     printf 'Refusing symlinked Hall Of Fame media directory.\n' >&2
@@ -410,15 +455,9 @@ upload_media() {
       ;;
   esac
 
-  read_session_token
-
   upload_args=(
-    --silent
-    --show-error
-    --fail-with-body
     --request POST
     --header 'Accept: application/json'
-    --header "Authorization: Bearer ${token}"
     --form "file=@${file_path}"
   )
 
@@ -426,7 +465,7 @@ upload_media() {
     upload_args+=(--form "context=${context}")
   fi
 
-  response=$(curl "${upload_args[@]}" "${base_url}/account/uploads")
+  response=$(authenticated_request "${base_url}/account/uploads" "${upload_args[@]}")
   status=$?
 
   if [[ $status -ne 0 ]]; then
@@ -559,15 +598,9 @@ if [[ $allowed != true ]]; then
   exit 77
 fi
 
-read_session_token
-
 curl_args=(
-  --silent
-  --show-error
-  --fail-with-body
   --request "$method"
   --header 'Accept: application/json'
-  --header "Authorization: Bearer ${token}"
 )
 
 if [[ $# -eq 3 ]]; then
@@ -579,4 +612,4 @@ if [[ $# -eq 3 ]]; then
   curl_args+=(--header 'Content-Type: application/json' --data-raw "$3")
 fi
 
-curl "${curl_args[@]}" "${base_url}${path}"
+authenticated_request "${base_url}${path}" "${curl_args[@]}"
