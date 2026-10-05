@@ -3,6 +3,7 @@ import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
 import { HallOfFameClient } from './HallOfFameClient'
+import { MinimalInteractionPolicy } from './MinimalInteractionPolicy'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
 import { SocialMemory } from './SocialMemory'
@@ -36,6 +37,11 @@ const tools = [
           type: 'object',
           description:
             'JSON body for POST or PUT only. Post comments, Post replies, and Story replies require a comment field, not text or content.',
+        },
+        notification_id: {
+          type: 'string',
+          description:
+            'Unread notification id that directly prompted this mutation. Required for mutations during minimal operations.',
         },
       },
       required: ['method', 'path'],
@@ -273,6 +279,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const activityContext = preloadActivity
       ? await this.loadActivityContext(client, token, memory)
       : undefined
+    const minimalPolicy =
+      minimalCycle && activityContext
+        ? new MinimalInteractionPolicy(activityContext.data.unreadNotifications)
+        : undefined
     if (activityContext) {
       this.setState({ ...this.state, lastActivityChecks: activityContext.checks })
     }
@@ -324,7 +334,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         })
 
         for (const call of calls) {
-          const output = await this.executeToolSafely(call, token, memory, minimalCycle)
+          const output = await this.executeToolSafely(call, token, memory, minimalPolicy)
           messages.push({
             role: 'tool',
             name: call.name,
@@ -381,7 +391,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     call: ToolCall,
     _token: string,
     memory: SocialMemory,
-    minimalCycle = false,
+    minimalPolicy?: MinimalInteractionPolicy,
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const client = this.createClient()
@@ -394,11 +404,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       if (!this.isMethod(method) || typeof path !== 'string')
         throw new Error('Invalid Hall Of Fame request tool arguments.')
 
-      if (minimalCycle) this.assertMinimalCycleRequest(method, path)
+      const notificationId =
+        typeof args.notification_id === 'string' ? args.notification_id : undefined
+      minimalPolicy?.assertAllowed(method, path, notificationId)
 
       const resolvedPath = this.resolvePostPath(path)
       const body = this.#bodyNormalizer.normalize(resolvedPath, args.body)
       const output = await client.request(method, resolvedPath, token, body)
+      if (method !== 'GET' && method !== 'PUT') minimalPolicy?.recordMutation(notificationId)
       if (method === 'GET') {
         this.indexResources(output)
         this.annotateInteractions(output, memory)
@@ -461,7 +474,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     call: ToolCall,
     token: string,
     memory: SocialMemory,
-    minimalCycle = false,
+    minimalPolicy?: MinimalInteractionPolicy,
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const method = this.isMethod(args.method) ? args.method : 'POST'
@@ -469,7 +482,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     for (let attempt = 1; attempt <= this.#retryPolicy.maxAttempts; attempt += 1) {
       try {
-        return await this.executeTool(call, token, memory, minimalCycle)
+        return await this.executeTool(call, token, memory, minimalPolicy)
       } catch (error) {
         lastError = error
         const retriable = this.#retryPolicy.isRetriable(error, method)
@@ -738,21 +751,6 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return Number.isSafeInteger(configured) && configured >= 60 && configured <= 86_400
       ? configured
       : DEFAULT_INTERVAL_SECONDS
-  }
-
-  private assertMinimalCycleRequest(method: HttpMethod, path: string): void {
-    const allowed =
-      (method === 'GET' &&
-        (/^\/posts\/[^/?]+(?:\/comments(?:\/[^/?]+\/replies)?)?(?:\?.*)?$/u.test(path) ||
-          /^\/stories\/[^/?]+(?:\/replies)?(?:\?.*)?$/u.test(path))) ||
-      (method === 'POST' &&
-        (/^\/posts\/[^/?]+\/comments(?:\/[^/?]+\/replies)?$/u.test(path) ||
-          /^\/stories\/[^/?]+\/replies$/u.test(path))) ||
-      (method === 'PUT' && /^\/account\/notifications\/[^/?]+\/read$/u.test(path))
-
-    if (!allowed) {
-      throw new Error('This request is unavailable during a minimal operations activity cycle.')
-    }
   }
 
   private indexResources(value: unknown): void {
