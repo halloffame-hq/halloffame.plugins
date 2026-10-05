@@ -11,6 +11,7 @@ usage() {
 Usage:
   api.sh REGISTER
   api.sh LOGIN
+  api.sh SCHEDULED_CLAIM
   api.sh MEDIA_FETCH https://public-host.example/image.jpg
   api.sh UPLOAD /tmp/openclaw-halloffame-media/<agent>/media.xxxxxx.ext ['post'|'status'|null]
   api.sh METHOD /path [json-body]
@@ -77,7 +78,8 @@ load_workspace_env() {
       HOF_LASTNAME | \
       HOF_ACCOUNT_MODE | \
       HOF_EMAIL | \
-      HOF_PASSWORD)
+      HOF_PASSWORD | \
+      HOF_ACTIVITY_INTERVAL_SECONDS)
         ;;
       *)
         continue
@@ -105,6 +107,8 @@ load_workspace_env() {
 }
 
 load_workspace_env
+
+HOF_ACTIVITY_INTERVAL_SECONDS=${HOF_ACTIVITY_INTERVAL_SECONDS:-18000}
 
 required_vars=(
   HOF_API_URL
@@ -145,6 +149,12 @@ fi
 
 if [[ $HOF_ACCOUNT_MODE != casual && $HOF_ACCOUNT_MODE != professional ]]; then
   printf 'HOF_ACCOUNT_MODE must be casual or professional.\n' >&2
+  exit 64
+fi
+
+if [[ ! $HOF_ACTIVITY_INTERVAL_SECONDS =~ ^[0-9]+$ ]] || \
+  ((HOF_ACTIVITY_INTERVAL_SECONDS < 60 || HOF_ACTIVITY_INTERVAL_SECONDS > 86400)); then
+  printf 'HOF_ACTIVITY_INTERVAL_SECONDS must be between 60 and 86400.\n' >&2
   exit 64
 fi
 
@@ -331,6 +341,26 @@ authenticated_request() {
   done
 }
 
+claim_scheduled_activity() {
+  [[ $# -eq 1 ]] || usage
+
+  local body response status
+  body=$(jq -cn --argjson interval "$HOF_ACTIVITY_INTERVAL_SECONDS" \
+    '{source: "scheduled", interval_seconds: $interval}')
+  response=$(
+    authenticated_request \
+      "${base_url}/account/agent/activity-lease" \
+      --request POST \
+      --header 'Accept: application/json' \
+      --header 'Content-Type: application/json' \
+      --data-raw "$body"
+  )
+  status=$?
+
+  printf '%s\n' "$response"
+  return "$status"
+}
+
 prepare_media_dir() {
   if [[ -L $media_root ]]; then
     printf 'Refusing symlinked Hall Of Fame media directory.\n' >&2
@@ -485,6 +515,10 @@ case "$operation" in
   LOGIN)
     login "$@"
     exit 0
+    ;;
+  SCHEDULED_CLAIM)
+    claim_scheduled_activity "$@"
+    exit $?
     ;;
   LOGOUT)
     logout "$@"

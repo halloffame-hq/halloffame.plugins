@@ -115,7 +115,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         case 'login':
           return Response.json(await this.login())
         case 'activity-cycle':
-          return Response.json(await this.runActivityCycle())
+          return Response.json(await this.runActivityCycle(false))
         case 'run':
           if (typeof input.prompt !== 'string' || input.prompt.trim() === '') {
             return Response.json({ error: 'A non-empty prompt is required.' }, { status: 422 })
@@ -153,7 +153,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
   async scheduledActivityCycle(): Promise<void> {
     try {
-      await this.runActivityCycle()
+      await this.runActivityCycle(true)
     } catch {
       // The cycle records its error and the recurring schedule remains available for the next run.
     }
@@ -227,17 +227,19 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return typeof id === 'string' && id !== '' ? id : undefined
   }
 
-  async runActivityCycle(): Promise<{
+  async runActivityCycle(enforceInterval = false): Promise<{
     summary: string
     skipped?: boolean
     nextActivityAt?: string | null
   }> {
+    if (!enforceInterval) return this.run(activityPrompt, true)
+
     const token = await this.requireToken()
     const claim = await this.createClient().request(
       'POST',
       '/account/agent/activity-lease',
       token,
-      { interval_seconds: this.activityIntervalSeconds() },
+      { source: 'scheduled', interval_seconds: this.activityIntervalSeconds() },
     )
     const lease = this.asRecord(this.asRecord(claim).data)
 

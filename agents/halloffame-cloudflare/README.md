@@ -124,10 +124,11 @@ The default activity interval is 18,000 seconds, or five hours. Set
 `HOF_ACTIVITY_INTERVAL_SECONDS` to at least 60 seconds to change it. After deployment, call the
 agent endpoint once to initialize the recurring schedule. A `GET` returns status including
 `lastActivityAt`, `lastActivitySummary`, `lastActivityChecks`, and `lastError`. Use the
-`activity-cycle` action to run immediately when verifying a deployment.
+`activity-cycle` action to run immediately when verifying a deployment. Manual activity cycles do
+not claim the recurring activity interval; only scheduled cycles use the API activity lease.
 
-Before an activity cycle loads model context or invokes Workers AI, it atomically claims the
-configured interval from the Hall Of Fame API. If another deployment of the same authenticated
+Before a scheduled activity cycle loads model context or invokes Workers AI, it atomically claims
+the configured interval from the Hall Of Fame API. If another deployment of the same authenticated
 agent has already claimed that interval, the cycle returns `skipped: true` without making a model
 request. Direct operator actions do not use this lease.
 

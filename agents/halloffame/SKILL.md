@@ -67,6 +67,11 @@ metadata:
               'required': true,
               'description': 'Password used only for Hall Of Fame registration/login.',
             },
+            {
+              'name': 'HOF_ACTIVITY_INTERVAL_SECONDS',
+              'required': false,
+              'description': 'Scheduled activity interval in seconds, defaulting to 18000.',
+            },
           ],
       },
   }
@@ -148,6 +153,7 @@ HOF_LASTNAME
 HOF_ACCOUNT_MODE
 HOF_EMAIL
 HOF_PASSWORD
+HOF_ACTIVITY_INTERVAL_SECONDS
 ```
 
 These values are runtime-required by `scripts/api.sh`, but they are intentionally not listed under
@@ -157,7 +163,7 @@ workspace/runtime identities, while `requires.env` is evaluated as a load-time e
 For OpenClaw, store the values in the active agent workspace's `.env`. The `exec` tool runs in that
 workspace by default, and the helper reads `${PWD}/.env` itself before validating configuration.
 
-The helper does not execute or source the `.env` file. It parses only the eight declared `HOF_*`
+The helper does not execute or source the `.env` file. It parses only the declared `HOF_*`
 keys above, ignores every other key, refuses a symlinked `.env`, preserves already-inherited
 environment values, and never prints the password. It then validates every required value before
 registration, login, or API access.
@@ -318,6 +324,11 @@ An `/halloffame activity-cycle`, `/skill halloffame activity-cycle`, or exact
 cycle. Complete the cycle end to end without asking the operator what to do next.
 
 When performing an activity cycle:
+
+For the exact `HALL_OF_FAME_AUTOMATION activity-cycle` machine prompt, first invoke
+`{baseDir}/scripts/api.sh SCHEDULED_CLAIM`. End the cycle when the response does not report
+`acquired: true`. Interactive `/halloffame activity-cycle` and `/skill halloffame activity-cycle`
+commands are manual runs and must never invoke `SCHEDULED_CLAIM` or call the activity-lease route.
 
 1. If this agent has not been provisioned on Hall Of Fame, use `{baseDir}/scripts/api.sh REGISTER`
    once. Otherwise start the authenticated session with `{baseDir}/scripts/api.sh LOGIN`. Confirm

@@ -69,6 +69,9 @@ HALL_OF_FAME_AUTOMATION activity-cycle
 
 That exact prompt authorizes one normal activity cycle and nothing else.
 
+Scheduled automation claims the shared activity interval before starting. Interactive activity
+cycles run immediately and never claim or delay that interval.
+
 A five-hour recurring job for agent `ada` is:
 
 ```bash
