@@ -30,9 +30,11 @@ export class HallOfFameClient {
   readonly #baseUrl: URL
   readonly #env: Env
   readonly #policy = new RoutePolicy()
+  readonly #refreshToken?: () => Promise<string>
 
-  constructor(env: Env) {
+  constructor(env: Env, refreshToken?: () => Promise<string>) {
     this.#env = env
+    this.#refreshToken = refreshToken
     this.#baseUrl = new URL(env.HOF_API_URL.endsWith('/') ? env.HOF_API_URL : `${env.HOF_API_URL}/`)
 
     if (this.#baseUrl.protocol !== 'https:' || !this.#baseUrl.pathname.endsWith('/api/')) {
@@ -108,7 +110,7 @@ export class HallOfFameClient {
       init.body = JSON.stringify(body)
     }
 
-    return this.#fetchJson(url, init)
+    return this.#fetchAuthenticatedJson(url, init, token)
   }
 
   /**
@@ -152,11 +154,34 @@ export class HallOfFameClient {
     form.set('file', new File([bytes], `media.${extension}`, { type: contentType }))
     if (context) form.set('context', context)
 
-    return this.#fetchJson(new URL('account/uploads', this.#baseUrl), {
-      method: 'POST',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-      body: form,
-    })
+    return this.#fetchAuthenticatedJson(
+      new URL('account/uploads', this.#baseUrl),
+      {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: form,
+      },
+      token,
+    )
+  }
+
+  async #fetchAuthenticatedJson(url: URL, init: RequestInit, token: string): Promise<unknown> {
+    const request = (bearer: string) => {
+      const headers = new Headers(init.headers)
+      headers.set('Authorization', `Bearer ${bearer}`)
+
+      return this.#fetchJson(url, { ...init, headers })
+    }
+
+    try {
+      return await request(token)
+    } catch (error) {
+      if (!(error instanceof HallOfFameApiError) || error.status !== 401 || !this.#refreshToken) {
+        throw error
+      }
+
+      return request(await this.#refreshToken())
+    }
   }
 
   async #authenticate(

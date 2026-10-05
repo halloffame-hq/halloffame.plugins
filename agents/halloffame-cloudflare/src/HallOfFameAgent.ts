@@ -77,6 +77,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   readonly #contextMarkers = new Map<string, string>()
   readonly #bodyNormalizer = new RequestBodyNormalizer()
   readonly #retryPolicy = new RequestRetryPolicy()
+  #tokenRefresh: Promise<string> | null = null
 
   initialState: AgentState = {
     authenticated: false,
@@ -178,7 +179,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     const token = await this.requireToken()
 
-    return new HallOfFameClient(this.env).request(method, path, token, body)
+    return this.createClient().request(method, path, token, body)
   }
 
   private async updateProfile(data: unknown): Promise<unknown> {
@@ -203,12 +204,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   private async setAvatar(sourceUrl: string): Promise<{ upload: unknown; profile: unknown }> {
-    const token = await this.requireToken()
-    const client = new HallOfFameClient(this.env)
+    let token = await this.requireToken()
+    const client = this.createClient()
     const upload = await client.fetchAndUploadMedia(sourceUrl.trim(), null, token)
     const mediaId = this.mediaIdFrom(upload)
     if (!mediaId) throw new Error('Media upload response did not contain a media id.')
 
+    token = await this.requireToken()
     const profile = await client.request('POST', '/account/avatar', token, {
       avatar_media_id: mediaId,
     })
@@ -231,7 +233,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     nextActivityAt?: string | null
   }> {
     const token = await this.requireToken()
-    const claim = await new HallOfFameClient(this.env).request(
+    const claim = await this.createClient().request(
       'POST',
       '/account/agent/activity-lease',
       token,
@@ -259,9 +261,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   async run(prompt: string, preloadActivity = false): Promise<{ summary: string }> {
-    const token = await this.requireToken()
-    const client = new HallOfFameClient(this.env)
+    let token = await this.requireToken()
+    const client = this.createClient()
     const identity = await client.request('GET', '/auth/me', token)
+    token = await this.requireToken()
     const personality = this.personalityFrom(identity)
     const memory = new SocialMemory(this.state.memory ?? SocialMemory.empty())
     const minimalCycle = preloadActivity && this.minimalOperationsEnabled()
@@ -374,12 +377,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
   private async executeTool(
     call: ToolCall,
-    token: string,
+    _token: string,
     memory: SocialMemory,
     minimalCycle = false,
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
-    const client = new HallOfFameClient(this.env)
+    const client = this.createClient()
+    const token = await this.requireToken()
 
     if (call.name === 'halloffame_request') {
       const method = args.method
@@ -534,6 +538,29 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     await this.storeToken(response.token)
 
     return response.token as string
+  }
+
+  private createClient(): HallOfFameClient {
+    return new HallOfFameClient(this.env, () => this.refreshToken())
+  }
+
+  private refreshToken(): Promise<string> {
+    if (this.#tokenRefresh) return this.#tokenRefresh
+
+    const refresh = new HallOfFameClient(this.env)
+      .login()
+      .then(async (response) => {
+        await this.storeToken(response.token)
+
+        return response.token as string
+      })
+      .finally(() => {
+        this.#tokenRefresh = null
+      })
+
+    this.#tokenRefresh = refresh
+
+    return refresh
   }
 
   private async storeToken(token: unknown): Promise<void> {
