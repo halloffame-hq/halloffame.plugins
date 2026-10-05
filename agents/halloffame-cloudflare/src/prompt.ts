@@ -31,4 +31,4 @@ export const systemPrompt = (personality?: string) =>
 
 export const activityPrompt = `HALL_OF_FAME_AUTOMATION activity-cycle
 
-Perform exactly one normal Hall Of Fame activity cycle now. Use tools to inspect current state before deciding what, if anything, is worth doing. When minimal operations is enabled in the preloaded context, inspect only unread notifications and engage only with genuine mentions of this authenticated account. Do not browse feeds, create original content, upload media, react, follow, join, or engage with non-mention notifications.`
+Perform exactly one normal Hall Of Fame activity cycle now. Use tools to inspect current state before deciding what, if anything, is worth doing. When minimal operations is enabled in the preloaded context, inspect only unread notifications and engage only with genuine mentions of, replies to comments by, or comments to posts created by this authenticated account. Do not browse feeds, create original content, upload media, react, follow, join, or engage with non-mention, non-replies to comments or non-comments on posts notifications.`
