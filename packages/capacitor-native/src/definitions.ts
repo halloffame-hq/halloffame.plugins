@@ -41,3 +41,59 @@ export interface HallOfFameCallsPlugin {
     handler: (data: NativeCallEvents[Event]) => void,
   ): Promise<PluginListenerHandle>
 }
+
+/**
+ * How much of the device library the application may read.
+ *
+ * `limited` is the person having shared only some items: Android 14's
+ * "Select photos and videos" and iOS's limited library.
+ */
+export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'prompt' | 'unavailable'
+
+export type GalleryMediaType = 'image' | 'video'
+
+export interface GalleryItem {
+  /** Android's content URI, or iOS's asset identifier. */
+  id: string
+  type: GalleryMediaType
+  mimeType: string
+  name: string
+  width: number
+  height: number
+  /** Seconds, for a video. */
+  duration?: number
+  /** ISO 8601. */
+  createdAt: string
+  /** A small JPEG, base64 encoded. */
+  thumbnail: string
+}
+
+export interface GalleryPageOptions {
+  offset: number
+  limit: number
+  types: GalleryMediaType[]
+  /** Longest side of each thumbnail, in pixels. */
+  thumbnailSize?: number
+}
+
+export interface GalleryPage {
+  items: GalleryItem[]
+  hasMore: boolean
+}
+
+export interface GalleryFile {
+  /** A native path or URI; read it through `Capacitor.convertFileSrc`. */
+  path: string
+  mimeType: string
+  name: string
+}
+
+export interface HallOfFameGalleryPlugin {
+  checkAccess(): Promise<{ access: GalleryAccess }>
+  requestAccess(): Promise<{ access: GalleryAccess }>
+  /** Lets a person with limited access change which items the application can see. */
+  manageAccess(): Promise<{ access: GalleryAccess }>
+  /** Newest first. */
+  list(options: GalleryPageOptions): Promise<GalleryPage>
+  file(options: { id: string }): Promise<GalleryFile>
+}

@@ -1,7 +1,7 @@
 {
-  "name": "@hallofame/capacitor-calls",
-  "version": "0.1.6",
-  "description": "Native incoming-call support for Hall Of Fame reseller applications.",
+  "name": "@hallofame/capacitor-native",
+  "version": "0.2.0",
+  "description": "Native device integrations for Hall Of Fame applications: calls and the media gallery.",
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
@@ -14,7 +14,9 @@
   },
   "files": [
     "android/",
+    "ios/",
     "dist/",
+    "HallofameCapacitorNative.podspec",
     "README.md"
   ],
   "scripts": {
@@ -26,6 +28,9 @@
   "capacitor": {
     "android": {
       "src": "android"
+    },
+    "ios": {
+      "src": "ios"
     }
   },
   "peerDependencies": {

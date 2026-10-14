@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 
 android {
-    namespace 'toneflix.halloffame.capacitor.calls'
+    namespace 'toneflix.halloffame.capacitor'
     compileSdk 36
 
     defaultConfig {

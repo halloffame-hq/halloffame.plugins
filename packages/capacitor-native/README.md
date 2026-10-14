@@ -1,8 +1,11 @@
-# `@hallofame/capacitor-calls`
+# `@hallofame/capacitor-native`
 
-Reusable Capacitor Android support for Hall Of Fame reseller calls. It provides native incoming-call
-notifications and the lock-screen surface, Android Telecom integration, audio routing, permissions,
-and device-local ringtone selection.
+Reusable Capacitor native support for Hall Of Fame applications:
+
+- `HallOfFameCalls` (Android): native incoming-call notifications and the lock-screen surface,
+  Android Telecom integration, audio routing, permissions, and device-local ringtone selection.
+- `HallOfFameGallery` (Android and iOS): the device's own photos and videos, paged newest first with
+  thumbnails and video durations, for an in-app gallery.
 
 The implementation derives the installed application's ID, label, icon, and launch activity at
 runtime. It contains no reseller package name or brand name. The host can override the plugin's
@@ -11,16 +14,28 @@ runtime. It contains no reseller package name or brand name. The host can overri
 ## Installation
 
 ```sh
-pnpm add @hallofame/capacitor-calls @capacitor/push-notifications
-pnpm exec cap sync android
+pnpm add @hallofame/capacitor-native @capacitor/push-notifications
+pnpm exec cap sync
 ```
-
-Import `HallOfFameCalls` from the package. The TypeScript API covers Telecom lifecycle and route
-events, full-screen/overlay permission settings, and native ringtone selection.
 
 Installing from a local path rather than a registry copies the package as it is on disk, and nothing
 in that copy builds afterwards. Build this package (`pnpm -r build` at the repository root) before
 installing it in a host application, or the host resolves a package with no `dist`.
+
+## Gallery
+
+`checkAccess()` and `requestAccess()` answer `granted`, `limited`, `denied` or `prompt` (`unavailable`
+in a browser). `limited` is Android 14's "Select photos and videos" and iOS's limited library;
+`manageAccess()` lets the person change that selection. `list({ offset, limit, types })` pages the
+library newest first; each item carries a base64 JPEG thumbnail, and videos a duration in seconds.
+`file({ id })` answers a path the WebView reads through `Capacitor.convertFileSrc`: Android's content
+URI itself, or on iOS a temporary copy, with HEIC photos converted to JPEG.
+
+On Android the library manifest declares `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`,
+`READ_MEDIA_VISUAL_USER_SELECTED`, and `READ_EXTERNAL_STORAGE` up to API 32. A host that also declares
+`READ_EXTERNAL_STORAGE` must not cap it below API 32. On iOS the host needs
+`NSPhotoLibraryUsageDescription`, and should set `PHPhotoLibraryPreventAutomaticLimitedAccessAlert`
+when it offers its own way to manage a limited selection.
 
 ## Android manifest
 
@@ -62,5 +77,5 @@ The bundled defaults can be overridden by defining resources with the same names
 `hof_call_incoming_video`, `hof_call_unknown_caller`, `hof_call_answer`, `hof_call_decline`, and the
 `hof_call_*` drawables.
 
-The native implementation currently targets Android. On web and iOS, Capacitor's unavailable-plugin
-rejection is expected; callers should guard by platform, as the Hall Of Fame client does.
+The call implementation targets Android. On web and iOS, Capacitor's unavailable-plugin rejection
+is expected; callers should guard by platform, as the Hall Of Fame client does.

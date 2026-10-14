@@ -1,5 +1,7 @@
 package toneflix.halloffame.capacitor.calls;
 
+import toneflix.halloffame.capacitor.R;
+
 import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.BroadcastReceiver;
