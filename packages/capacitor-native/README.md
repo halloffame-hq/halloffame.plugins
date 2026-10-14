@@ -18,9 +18,106 @@ pnpm add @hallofame/capacitor-native @capacitor/push-notifications
 pnpm exec cap sync
 ```
 
-Installing from a local path rather than a registry copies the package as it is on disk, and nothing
-in that copy builds afterwards. Build this package (`pnpm -r build` at the repository root) before
-installing it in a host application, or the host resolves a package with no `dist`.
+## Setup
+
+### iOS
+
+The gallery reads the photo library, so add a usage description to your app's `Info.plist`. Set
+`PHPhotoLibraryPreventAutomaticLimitedAccessAlert` when your app offers its own way to change a
+limited selection (through `manageAccess()`), so iOS does not also prompt on its own:
+
+```xml
+<dict>
+  ...
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Describe why you need access to the person's photos and videos</string>
+  <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+  <true/>
+  ...
+</dict>
+```
+
+Calls have no iOS implementation, so they need no iOS entries.
+
+### Android
+
+Nothing needs to be added by hand. The library manifest declares every permission it uses, and
+Android's manifest merger adds them to your app:
+
+```xml
+<manifest>
+  ...
+  <!-- Calls -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
+  <!-- Gallery -->
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+  ...
+</manifest>
+```
+
+The gallery asks for whichever of these the device's Android version uses: `READ_EXTERNAL_STORAGE`
+up to Android 12, `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO` from Android 13, and
+`READ_MEDIA_VISUAL_USER_SELECTED` as well from Android 14, where a person may share only some items.
+
+If your app declares `READ_EXTERNAL_STORAGE` itself, cap it at API 32 or higher. A lower cap in the
+app manifest wins the merge and leaves the gallery unable to read on Android 10 to 12:
+
+```xml
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+```
+
+Google Play asks apps that hold `READ_MEDIA_IMAGES` or `READ_MEDIA_VIDEO` to justify broad photo and
+video access in a Play Console declaration. An app that does not use the gallery can remove its
+permissions from the merged manifest:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+  ...
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
+  ...
+</manifest>
+```
+
+### Asking for access
+
+`requestAccess()` shows the system prompt only while access is undecided; afterwards it answers the
+current state. Read `limited` as access to whatever the person shared:
+
+```ts
+import { HallOfFameGallery } from '@hallofame/capacitor-native'
+
+let { access } = await HallOfFameGallery.checkAccess()
+if (access === 'prompt') ({ access } = await HallOfFameGallery.requestAccess())
+
+if (access === 'granted' || access === 'limited') {
+  const { items, hasMore } = await HallOfFameGallery.list({
+    offset: 0,
+    limit: 48,
+    types: ['image', 'video'],
+  })
+}
+
+// With limited access, let the person change what they shared.
+if (access === 'limited') ({ access } = await HallOfFameGallery.manageAccess())
+```
+
+`list()` rejects with the code `ACCESS_DENIED` when there is no access.
 
 ## Gallery
 
@@ -31,20 +128,14 @@ library newest first; each item carries a base64 JPEG thumbnail, and videos a du
 `file({ id })` answers a path the WebView reads through `Capacitor.convertFileSrc`: Android's content
 URI itself, or on iOS a temporary copy, with HEIC photos converted to JPEG.
 
-On Android the library manifest declares `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`,
-`READ_MEDIA_VISUAL_USER_SELECTED`, and `READ_EXTERNAL_STORAGE` up to API 32. A host that also declares
-`READ_EXTERNAL_STORAGE` must not cap it below API 32. On iOS the host needs
-`NSPhotoLibraryUsageDescription`, and should set `PHPhotoLibraryPreventAutomaticLimitedAccessAlert`
-when it offers its own way to manage a limited selection.
+## Android manifest components
 
-## Android manifest
-
-No call-related host manifest entries are required. The plugin's library manifest contributes:
+No call-related host manifest entries are required. Besides the permissions listed under
+[Setup](#android), the plugin's library manifest contributes:
 
 - its lock-screen incoming-call activity;
 - its self-managed Telecom connection service;
 - its FCM service;
-- call, notification, full-screen, overlay, foreground-service, Bluetooth and wake-lock permissions;
 - optional camera and microphone hardware features.
 
 The plugin FCM service subclasses Capacitor Push Notifications' service and forwards every message
