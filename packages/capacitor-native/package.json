@@ -1,6 +1,6 @@
 {
   "name": "@hallofame/capacitor-native",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Native device integrations for Hall Of Fame applications: calls and the media gallery.",
   "type": "module",
   "main": "./dist/index.mjs",
