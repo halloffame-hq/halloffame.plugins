@@ -6,6 +6,8 @@ Reusable Capacitor native support for Hall Of Fame applications:
   Android Telecom integration, audio routing, permissions, and device-local ringtone selection.
 - `HallOfFameGallery` (Android and iOS): the device's own photos and videos, paged newest first with
   thumbnails and video durations, for an in-app gallery.
+- `HallOfFameInstallReferrer` (Android): the Play Store referrer the installed build was downloaded
+  with, so a link followed before installing can still be honoured.
 
 The implementation derives the installed application's ID, label, icon, and launch activity at
 runtime. It contains no reseller package name or brand name. The host can override the plugin's
@@ -127,6 +129,21 @@ in a browser). `limited` is Android 14's "Select photos and videos" and iOS's li
 library newest first; each item carries a base64 JPEG thumbnail, and videos a duration in seconds.
 `file({ id })` answers a path the WebView reads through `Capacitor.convertFileSrc`: Android's content
 URI itself, or on iOS a temporary copy, with HEIC photos converted to JPEG.
+
+## Install referrer
+
+`get()` answers `{ referrer, clickedAt, installedAt }`. On Android `referrer` is the `referrer`
+parameter of the Play Store link the build was installed from, for example `ref%3Dusername` on
+`https://play.google.com/store/apps/details?id=<applicationId>&referrer=ref%3Dusername` arrives as
+`ref=username`. Play keeps it for 90 days after install. iOS and browsers always answer `null`,
+because the App Store passes nothing to an installed app.
+
+```ts
+import { HallOfFameInstallReferrer } from '@hallofame/capacitor-native'
+
+const { referrer } = await HallOfFameInstallReferrer.get()
+const username = new URLSearchParams(referrer ?? '').get('ref')
+```
 
 ## Android manifest components
 

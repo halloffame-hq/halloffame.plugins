@@ -22,6 +22,10 @@ it('registers under the names the native plugins answer to', async () => {
     'HallOfFameGallery',
     expect.objectContaining({ web: expect.any(Function) }),
   )
+  expect(registerPlugin).toHaveBeenCalledWith(
+    'HallOfFameInstallReferrer',
+    expect.objectContaining({ web: expect.any(Function) }),
+  )
 })
 
 it('reports the gallery as unavailable in a browser', async () => {
@@ -30,4 +34,14 @@ it('reports the gallery as unavailable in a browser', async () => {
 
   await expect(gallery.checkAccess()).resolves.toEqual({ access: 'unavailable' })
   await expect(gallery.list()).resolves.toEqual({ items: [], hasMore: false })
+})
+
+it('reports no install referrer in a browser', async () => {
+  const { HallOfFameInstallReferrerWeb } = await import('../src/referrer-web')
+
+  await expect(new HallOfFameInstallReferrerWeb().get()).resolves.toEqual({
+    referrer: null,
+    clickedAt: null,
+    installedAt: null,
+  })
 })

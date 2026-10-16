@@ -97,3 +97,17 @@ export interface HallOfFameGalleryPlugin {
   list(options: GalleryPageOptions): Promise<GalleryPage>
   file(options: { id: string }): Promise<GalleryFile>
 }
+
+export interface InstallReferrer {
+  /** The store's `referrer` parameter, for example `ref=username`, or null when there was none. */
+  referrer: string | null
+  /** Epoch milliseconds. */
+  clickedAt: number | null
+  /** Epoch milliseconds. */
+  installedAt: number | null
+}
+
+export interface HallOfFameInstallReferrerPlugin {
+  /** Android reads the Play Install Referrer; iOS and browsers always report none. */
+  get(): Promise<InstallReferrer>
+}

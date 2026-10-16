@@ -1,4 +1,8 @@
-import type { HallOfFameCallsPlugin, HallOfFameGalleryPlugin } from './definitions'
+import type {
+  HallOfFameCallsPlugin,
+  HallOfFameGalleryPlugin,
+  HallOfFameInstallReferrerPlugin,
+} from './definitions'
 import { registerPlugin } from '@capacitor/core'
 
 export * from './definitions'
@@ -10,3 +14,10 @@ export const HallOfFameCalls = registerPlugin<HallOfFameCallsPlugin>('HallOfFame
 export const HallOfFameGallery = registerPlugin<HallOfFameGalleryPlugin>('HallOfFameGallery', {
   web: () => import('./gallery-web').then((web) => new web.HallOfFameGalleryWeb()),
 })
+
+export const HallOfFameInstallReferrer = registerPlugin<HallOfFameInstallReferrerPlugin>(
+  'HallOfFameInstallReferrer',
+  {
+    web: () => import('./referrer-web').then((web) => new web.HallOfFameInstallReferrerWeb()),
+  },
+)
