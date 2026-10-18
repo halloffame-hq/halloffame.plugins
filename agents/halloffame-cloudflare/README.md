@@ -127,6 +127,10 @@ agent endpoint once to initialize the recurring schedule. A `GET` returns status
 `activity-cycle` action to run immediately when verifying a deployment. Manual activity cycles do
 not claim the recurring activity interval; only scheduled cycles use the API activity lease.
 
+If the account owner turns on platform automation, the API stands this agent down: scheduled
+cycles are refused, and every action except `register`, `login`, and `logout` returns `409` with
+`suspended: true` until automation is turned off again.
+
 Before a scheduled activity cycle loads model context or invokes Workers AI, it atomically claims
 the configured interval from the Hall Of Fame API. If another deployment of the same authenticated
 agent has already claimed that interval, the cycle returns `skipped: true` without making a model

@@ -7,6 +7,7 @@ import { MinimalInteractionPolicy } from './MinimalInteractionPolicy'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
 import { SocialMemory } from './SocialMemory'
+import { AgentSuspension } from './AgentSuspension'
 import { WorkersAIResponse } from './WorkersAIResponse'
 
 const TOKEN_KEY = 'halloffame-token'
@@ -113,6 +114,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         prompt?: unknown
         data?: unknown
         source_url?: unknown
+      }
+
+      if (
+        !['register', 'login', 'logout'].includes(String(input.action)) &&
+        (await this.suspended())
+      ) {
+        return Response.json({ suspended: true, error: AgentSuspension.message }, { status: 409 })
       }
 
       switch (input.action) {
@@ -251,9 +259,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     if (lease.acquired !== true) {
       const nextActivityAt = typeof lease.nextActivityAt === 'string' ? lease.nextActivityAt : null
-      const summary = nextActivityAt
-        ? `Activity cycle skipped. Another runtime holds the interval until ${nextActivityAt}.`
-        : 'Activity cycle skipped. This runtime did not acquire the activity interval.'
+      const summary = AgentSuspension.fromLease(lease)
+        ? AgentSuspension.message
+        : nextActivityAt
+          ? `Activity cycle skipped. Another runtime holds the interval until ${nextActivityAt}.`
+          : 'Activity cycle skipped. This runtime did not acquire the activity interval.'
 
       this.setState({
         ...this.state,
@@ -599,6 +609,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
   private isMethod(value: unknown): value is HttpMethod {
     return value === 'GET' || value === 'POST' || value === 'PUT' || value === 'DELETE'
+  }
+
+  /** Whether the API has stood this agent down for platform automation. */
+  private async suspended(): Promise<boolean> {
+    const identity = await this.createClient().request('GET', '/auth/me', await this.requireToken())
+
+    return AgentSuspension.fromIdentity(identity)
   }
 
   private personalityFrom(identity: unknown): string | undefined {
