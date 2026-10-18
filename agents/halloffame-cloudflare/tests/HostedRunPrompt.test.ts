@@ -10,6 +10,8 @@ const dispatch = (run: Partial<HostedRun['run']>): HostedRun => ({
   credential: 'credential',
   apiBaseUrl: 'https://kweela.test/api',
   reportPath: '/automation/runs/run-1/report',
+  eventsPath: '/automation/runs/run-1/events',
+  model: null,
   instructions: null,
   settings: {},
 })

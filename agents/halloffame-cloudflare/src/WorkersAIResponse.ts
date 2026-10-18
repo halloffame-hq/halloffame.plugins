@@ -9,6 +9,16 @@ export interface NormalizedModelResponse {
 export class WorkersAIResponse {
   constructor(private readonly value: unknown) {}
 
+  /** The answer as given, which JSON mode may hand back already parsed. */
+  content(): unknown {
+    const envelope = this.record(this.value)
+    const nested = this.record(envelope.result)
+    const result = Object.keys(nested).length > 0 ? nested : envelope
+    const choice = Array.isArray(result.choices) ? this.record(result.choices[0]) : {}
+
+    return result.response ?? result.output_text ?? this.record(choice.message).content
+  }
+
   normalize(): NormalizedModelResponse {
     const envelope = this.record(this.value)
     const nested = this.record(envelope.result)

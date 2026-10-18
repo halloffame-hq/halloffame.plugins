@@ -17,6 +17,7 @@ import { RequestRetryPolicy } from './RequestRetryPolicy'
 import { SocialMemory } from './SocialMemory'
 import { AgentSuspension } from './AgentSuspension'
 import { HostedRunPrompt } from './HostedRunPrompt'
+import { StructuredReplies } from './StructuredReplies'
 import { WorkersAIResponse } from './WorkersAIResponse'
 
 const TOKEN_KEY = 'halloffame-token'
@@ -124,13 +125,91 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   /** Carry out one platform run, then report its outcome and usage to the API. */
+  /** Routine replies: the interactions are read, then answered in one structured model call. */
+  private async answerInteractions(dispatch: HostedRun): Promise<{ summary: string }> {
+    const client = this.createClient()
+    const identity = await client.request('GET', '/auth/me', dispatch.credential)
+
+    return new StructuredReplies({
+      request: (method, path, body) => client.request(method, path, dispatch.credential, body),
+      ask: (messages, schema) => this.requestStructured(messages, schema),
+    }).answer(dispatch.run.triggers, systemPrompt(this.personalityFrom(identity)))
+  }
+
+  /** One model call constrained to a JSON schema; its usage counts toward the run. */
+  private async requestStructured(
+    messages: Record<string, unknown>[],
+    schema: Record<string, unknown>,
+  ): Promise<unknown> {
+    const rawResult = await this.env.AI.run(
+      this.model() as keyof AiModels,
+      {
+        messages,
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'automation_replies', strict: true, schema },
+        },
+        max_tokens: 800,
+      } as never,
+    )
+    const response = new WorkersAIResponse(rawResult)
+    this.countUsage(response.normalize().usage)
+
+    return response.content()
+  }
+
+  /** Stream a step or message of a platform run to its owner and managers; best effort. */
+  private async emit(type: 'progress' | 'message', text: string): Promise<void> {
+    if (!this.#hosted || !text.trim()) return
+
+    try {
+      await this.createClient().request('POST', this.#hosted.eventsPath, this.#hosted.credential, {
+        type,
+        text: text.slice(0, 2000),
+      })
+    } catch {
+      // The run goes on whether or not anyone is watching it.
+    }
+  }
+
+  /** A plain account of one tool step, for whoever is watching the run. */
+  private describeStep(call: ToolCall): string {
+    const args = this.asRecord(call.arguments)
+    if (call.name === 'halloffame_media_upload') return 'Uploaded an image.'
+    if (call.name === 'halloffame_memory') return 'Updated its memory.'
+
+    const verbs: Record<string, string> = {
+      GET: 'Read',
+      POST: 'Posted to',
+      PUT: 'Updated',
+      DELETE: 'Removed',
+    }
+
+    return `${verbs[String(args.method)] ?? 'Called'} ${String(args.path ?? '')}`.trim()
+  }
+
+  private model(): string {
+    return this.#hosted?.model || this.env.HOF_MODEL || DEFAULT_MODEL
+  }
+
+  private countUsage(usage: ModelUsage): void {
+    this.#usage = {
+      inputTokens: this.#usage.inputTokens + usage.inputTokens,
+      outputTokens: this.#usage.outputTokens + usage.outputTokens,
+    }
+  }
+
   async executeHostedRun(dispatch: HostedRun): Promise<void> {
     this.#hosted = dispatch
     this.#usage = { inputTokens: 0, outputTokens: 0 }
     let report: Record<string, unknown>
 
     try {
-      const { summary } = await this.run(HostedRunPrompt.for(dispatch))
+      const { summary } =
+        dispatch.run.kind === 'interaction'
+          ? await this.answerInteractions(dispatch)
+          : await this.run(HostedRunPrompt.for(dispatch))
+      await this.emit('message', summary)
       report = { status: 'completed', summary }
     } catch (error) {
       report = { status: 'failed', error: this.errorMessage(error).slice(0, 255) }
@@ -392,6 +471,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
         for (const call of calls) {
           const output = await this.executeToolSafely(call, token, memory, minimalPolicy)
+          await this.emit('progress', this.describeStep(call))
           messages.push({
             role: 'tool',
             name: call.name,
@@ -427,7 +507,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
             ]
           : []
       const rawResult = await this.env.AI.run(
-        (this.env.HOF_MODEL ?? DEFAULT_MODEL) as keyof AiModels,
+        this.model() as keyof AiModels,
         {
           messages: [...messages, ...retryInstruction],
           tools,
@@ -436,10 +516,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         } as never,
       )
       const result = new WorkersAIResponse(rawResult).normalize()
-      this.#usage = {
-        inputTokens: this.#usage.inputTokens + result.usage.inputTokens,
-        outputTokens: this.#usage.outputTokens + result.usage.outputTokens,
-      }
+      this.countUsage(result.usage)
       if (result.text || result.toolCalls.length > 0) return result
     }
 

@@ -99,6 +99,10 @@ export interface HostedRun {
   credential: string
   apiBaseUrl: string
   reportPath: string
+  /** Where progress and messages are streamed while the run is under way. */
+  eventsPath: string
+  /** The platform's choice of model, or null for the runtime default. */
+  model: string | null
   instructions: string | null
   settings: {
     minimalOperations?: boolean
