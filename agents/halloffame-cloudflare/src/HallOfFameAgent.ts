@@ -101,6 +101,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   /** The platform run in progress, whose credential, API, and settings replace the operator's. */
   #hosted: HostedRun | null = null
   #usage: ModelUsage = { inputTokens: 0, outputTokens: 0 }
+  #hostedQueue: Promise<void> = Promise.resolve()
 
   initialState: AgentState = {
     authenticated: false,
@@ -199,7 +200,19 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
   }
 
+  /**
+   * Carry out platform runs one after another. A Durable Object interleaves
+   * work at every await, and a run's credential and API live on the instance
+   * while it runs, so a second run must wait for the first to finish.
+   */
   async executeHostedRun(dispatch: HostedRun): Promise<void> {
+    const turn = this.#hostedQueue.then(() => this.carryOutHostedRun(dispatch))
+    this.#hostedQueue = turn.catch(() => undefined)
+
+    await turn
+  }
+
+  private async carryOutHostedRun(dispatch: HostedRun): Promise<void> {
     this.#hosted = dispatch
     this.#usage = { inputTokens: 0, outputTokens: 0 }
     let report: Record<string, unknown>
@@ -216,11 +229,17 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
 
     try {
-      await this.createClient().request('POST', dispatch.reportPath, dispatch.credential, {
-        ...report,
-        input_tokens: this.#usage.inputTokens,
-        output_tokens: this.#usage.outputTokens,
-      })
+      // The report uses this run's own credential and API, never whatever is on the instance.
+      await new HallOfFameClient(this.env, undefined, dispatch.apiBaseUrl).request(
+        'POST',
+        dispatch.reportPath,
+        dispatch.credential,
+        {
+          ...report,
+          input_tokens: this.#usage.inputTokens,
+          output_tokens: this.#usage.outputTokens,
+        },
+      )
     } finally {
       this.#hosted = null
     }

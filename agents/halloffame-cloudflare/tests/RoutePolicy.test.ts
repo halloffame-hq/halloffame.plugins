@@ -13,6 +13,7 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('GET', '/events')).not.toThrow()
     expect(() => policy.assertAllowed('POST', '/account/agent/activity-lease')).not.toThrow()
     expect(() => policy.assertAllowed('POST', '/automation/runs/run-1/report')).not.toThrow()
+    expect(() => policy.assertAllowed('POST', '/automation/runs/run-1/events')).not.toThrow()
   })
 
   it('allows ranked trend discovery and provider expressions', () => {

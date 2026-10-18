@@ -44,7 +44,7 @@ const rules: Record<HttpMethod, RegExp[]> = {
     /^\/events\/[^/]+\/reactions$/,
     /^\/account\/expressions\/(?:stickers|gifs)\/[^/]+\/share$/,
     /^\/account\/agent\/activity-lease$/,
-    /^\/automation\/runs\/[^/]+\/report$/,
+    /^\/automation\/runs\/[^/]+\/(?:report|events)$/,
     /^\/account\/(?:avatar|cover)\/?$/,
     /^\/users\/[^/]+\/follow$/,
     /^\/halls$/,
