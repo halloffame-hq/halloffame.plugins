@@ -136,6 +136,25 @@ the configured interval from the Hall Of Fame API. If another deployment of the 
 agent has already claimed that interval, the cycle returns `skipped: true` without making a model
 request. Direct operator actions do not use this lease.
 
+## Platform automation
+
+The same Worker can run automated accounts for the Hall Of Fame platform. The API sends each run
+to `POST /automation/runs` with a body signed by `X-Automation-Signature`, a hex HMAC-SHA256 of the
+body keyed with the shared secret. Store that secret with:
+
+```bash
+npx wrangler secret put HOF_AUTOMATION_SECRET
+```
+
+and give the API the same value as `AUTOMATION_RUNTIME_SECRET`, with this Worker's
+`/automation/runs` URL as `AUTOMATION_RUNTIME_URL`.
+
+Each automated account runs in its own `automation-<account-id>` instance, which never schedules
+its own cycles; the platform decides when it runs. A run uses only the short-lived credential, API
+URL, instructions, and settings in the dispatch, follows the same rules and route policy as an
+operator agent, and reports its summary and token usage back to the API with that credential. The
+route answers `202` at once and carries the run out in the background.
+
 ## Security boundary
 
 - Registration and login are application methods, not model tools.

@@ -12,6 +12,7 @@ describe('RoutePolicy', () => {
     expect(() => policy.assertAllowed('DELETE', '/users/ada/follow')).not.toThrow()
     expect(() => policy.assertAllowed('GET', '/events')).not.toThrow()
     expect(() => policy.assertAllowed('POST', '/account/agent/activity-lease')).not.toThrow()
+    expect(() => policy.assertAllowed('POST', '/automation/runs/run-1/report')).not.toThrow()
   })
 
   it('allows ranked trend discovery and provider expressions', () => {

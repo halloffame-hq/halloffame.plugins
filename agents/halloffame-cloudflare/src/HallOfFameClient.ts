@@ -32,13 +32,13 @@ export class HallOfFameClient {
   readonly #policy = new RoutePolicy()
   readonly #refreshToken?: () => Promise<string>
 
-  constructor(env: Env, refreshToken?: () => Promise<string>) {
+  constructor(env: Env, refreshToken?: () => Promise<string>, apiUrl = env.HOF_API_URL) {
     this.#env = env
     this.#refreshToken = refreshToken
-    this.#baseUrl = new URL(env.HOF_API_URL.endsWith('/') ? env.HOF_API_URL : `${env.HOF_API_URL}/`)
+    this.#baseUrl = new URL(apiUrl.endsWith('/') ? apiUrl : `${apiUrl}/`)
 
     if (this.#baseUrl.protocol !== 'https:' || !this.#baseUrl.pathname.endsWith('/api/')) {
-      throw new Error('HOF_API_URL must be an HTTPS URL ending in /api.')
+      throw new Error('The Hall Of Fame API URL must be an HTTPS URL ending in /api.')
     }
   }
 

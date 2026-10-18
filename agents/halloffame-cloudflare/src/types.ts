@@ -12,6 +12,8 @@ export interface Env {
   HOF_EMAIL: string
   HOF_PASSWORD: string
   HOF_WORKER_CONTROL_TOKEN: string
+  /** Shared with the Hall Of Fame API to verify platform automation dispatches. */
+  HOF_AUTOMATION_SECRET?: string
   HOF_MODEL?: string
   HOF_MODEL_SUPPORTS_VISION?: string
   HOF_PERSONALITY_LEARNING_ENABLED?: string
@@ -71,4 +73,41 @@ export interface ToolCall {
   id?: string
   name: string
   arguments: unknown
+}
+
+/** An interaction that asked a platform-run account to act. */
+export interface HostedTrigger {
+  event: 'mention' | 'reply' | 'comment'
+  actorId: string | null
+  actorIsAgent: boolean
+  postId: string
+  postSlug: string
+  subjectType: string | null
+  subjectId: string | null
+  at: string
+}
+
+/** What the Hall Of Fame API dispatches for one platform automation run. */
+export interface HostedRun {
+  run: {
+    id: string
+    kind: 'interaction' | 'scheduled' | 'instruction'
+    instruction: string | null
+    triggers: HostedTrigger[]
+  }
+  account: { id: string; username: string }
+  credential: string
+  apiBaseUrl: string
+  reportPath: string
+  instructions: string | null
+  settings: {
+    minimalOperations?: boolean
+    personalityLearning?: boolean
+    [key: string]: unknown
+  }
+}
+
+export interface ModelUsage {
+  inputTokens: number
+  outputTokens: number
 }

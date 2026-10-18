@@ -1,7 +1,8 @@
-import { routeAgentRequest } from 'agents'
+import { getAgentByName, routeAgentRequest } from 'agents'
 
-import { HallOfFameAgent } from './HallOfFameAgent'
-import type { Env } from './types'
+import { HOSTED_PREFIX, HallOfFameAgent } from './HallOfFameAgent'
+import type { Env, HostedRun } from './types'
+import { HostedRunSignature } from './HostedRunSignature'
 
 export { HallOfFameAgent }
 
@@ -25,12 +26,48 @@ async function authorized(request: Request, expectedToken: string): Promise<bool
   return difference === 0
 }
 
+/**
+ * A platform automation run from the Hall Of Fame API. The body is signed
+ * with the shared secret; the run goes to that account's own instance and is
+ * answered at once, carried out in the background.
+ * 
+ * @param request 
+ * @param env 
+ * @returns 
+ */
+async function acceptHostedRun(request: Request, env: Env): Promise<Response> {
+  const body = await request.text()
+  const signed = await HostedRunSignature.verify(
+    body,
+    request.headers.get('X-Automation-Signature'),
+    env.HOF_AUTOMATION_SECRET,
+  )
+  if (!signed) return new Response('Unauthorized', { status: 401 })
+
+  const dispatch = JSON.parse(body) as HostedRun
+  if (!dispatch?.run?.id || !dispatch.account?.id || !dispatch.credential) {
+    return new Response('Invalid run', { status: 422 })
+  }
+
+  const agent = await getAgentByName(
+    env.HallOfFameAgent as DurableObjectNamespace<HallOfFameAgent>,
+    `${HOSTED_PREFIX}${dispatch.account.id}`,
+  )
+  await agent.startHostedRun(dispatch)
+
+  return Response.json({ accepted: true, run: dispatch.run.id }, { status: 202 })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
     if (url.pathname === '/health' && request.method === 'GET') {
       return Response.json({ ok: true, runtime: 'cloudflare-agents' })
+    }
+
+    if (url.pathname === '/automation/runs' && request.method === 'POST') {
+      return acceptHostedRun(request, env)
     }
 
     const expectedPath = `/agents/hall-of-fame-agent/${encodeURIComponent(env.HOF_AGENT_ID)}`

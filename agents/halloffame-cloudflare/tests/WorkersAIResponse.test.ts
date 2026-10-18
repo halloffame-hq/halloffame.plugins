@@ -48,4 +48,22 @@ describe('WorkersAIResponse', () => {
     expect(response.text).toBe('Updated the profile.')
     expect(response.toolCalls).toHaveLength(1)
   })
+
+  it('reads token usage in either naming', () => {
+    expect(
+      new WorkersAIResponse({
+        response: 'Done.',
+        usage: { prompt_tokens: 120, completion_tokens: 30 },
+      }).normalize().usage,
+    ).toEqual({ inputTokens: 120, outputTokens: 30 })
+    expect(
+      new WorkersAIResponse({
+        result: { response: 'Done.', usage: { input_tokens: 5, output_tokens: 2 } },
+      }).normalize().usage,
+    ).toEqual({ inputTokens: 5, outputTokens: 2 })
+    expect(new WorkersAIResponse({ response: 'Done.' }).normalize().usage).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+    })
+  })
 })

@@ -1,4 +1,12 @@
-import type { AgentState, Env, HttpMethod, RequestFailure, ToolCall } from './types'
+import type {
+  AgentState,
+  Env,
+  HostedRun,
+  HttpMethod,
+  ModelUsage,
+  RequestFailure,
+  ToolCall,
+} from './types'
 import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
@@ -8,6 +16,7 @@ import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
 import { SocialMemory } from './SocialMemory'
 import { AgentSuspension } from './AgentSuspension'
+import { HostedRunPrompt } from './HostedRunPrompt'
 import { WorkersAIResponse } from './WorkersAIResponse'
 
 const TOKEN_KEY = 'halloffame-token'
@@ -16,6 +25,9 @@ const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
 const MAX_EMPTY_MODEL_RETRIES = 2
 const MAX_REQUEST_FAILURES = 20
+
+/** Instances named with this prefix run accounts for the platform rather than for an operator. */
+export const HOSTED_PREFIX = 'automation-'
 
 type ModelMessage = Record<string, unknown>
 
@@ -85,6 +97,9 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   readonly #bodyNormalizer = new RequestBodyNormalizer()
   readonly #retryPolicy = new RequestRetryPolicy()
   #tokenRefresh: Promise<string> | null = null
+  /** The platform run in progress, whose credential, API, and settings replace the operator's. */
+  #hosted: HostedRun | null = null
+  #usage: ModelUsage = { inputTokens: 0, outputTokens: 0 }
 
   initialState: AgentState = {
     authenticated: false,
@@ -97,7 +112,39 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   async onStart(): Promise<void> {
+    // The platform decides when a hosted account runs; only operator agents keep their own cycle.
+    if (this.name.startsWith(HOSTED_PREFIX)) return
+
     await this.scheduleEvery(this.activityIntervalSeconds(), 'scheduledActivityCycle', {})
+  }
+
+  /** Accept a platform run and carry it out in the background. */
+  async startHostedRun(dispatch: HostedRun): Promise<void> {
+    await this.schedule(0, 'executeHostedRun', dispatch)
+  }
+
+  /** Carry out one platform run, then report its outcome and usage to the API. */
+  async executeHostedRun(dispatch: HostedRun): Promise<void> {
+    this.#hosted = dispatch
+    this.#usage = { inputTokens: 0, outputTokens: 0 }
+    let report: Record<string, unknown>
+
+    try {
+      const { summary } = await this.run(HostedRunPrompt.for(dispatch))
+      report = { status: 'completed', summary }
+    } catch (error) {
+      report = { status: 'failed', error: this.errorMessage(error).slice(0, 255) }
+    }
+
+    try {
+      await this.createClient().request('POST', dispatch.reportPath, dispatch.credential, {
+        ...report,
+        input_tokens: this.#usage.inputTokens,
+        output_tokens: this.#usage.outputTokens,
+      })
+    } finally {
+      this.#hosted = null
+    }
   }
 
   async onRequest(request: Request): Promise<Response> {
@@ -389,6 +436,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         } as never,
       )
       const result = new WorkersAIResponse(rawResult).normalize()
+      this.#usage = {
+        inputTokens: this.#usage.inputTokens + result.usage.inputTokens,
+        outputTokens: this.#usage.outputTokens + result.usage.outputTokens,
+      }
       if (result.text || result.toolCalls.length > 0) return result
     }
 
@@ -556,6 +607,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   private async requireToken(): Promise<string> {
+    if (this.#hosted) return this.#hosted.credential
+
     const token = await this.ctx.storage.get<string>(TOKEN_KEY)
     if (token) return token
 
@@ -566,6 +619,9 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   private createClient(): HallOfFameClient {
+    // A platform credential cannot be refreshed; an expired one ends the run.
+    if (this.#hosted) return new HallOfFameClient(this.env, undefined, this.#hosted.apiBaseUrl)
+
     return new HallOfFameClient(this.env, () => this.refreshToken())
   }
 
@@ -622,11 +678,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const envelope = this.asRecord(identity)
     const account = this.asRecord(envelope.data)
     const agent = this.asRecord(account.agent)
-    const personality = agent.personality
+    const personality = [agent.personality, this.#hosted?.instructions]
+      .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
+      .map((part) => part.trim())
+      .join('\n\n')
 
-    return typeof personality === 'string' && personality.trim() !== ''
-      ? personality.trim()
-      : undefined
+    return personality || undefined
   }
 
   private async loadActivityContext(
@@ -755,10 +812,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   }
 
   private personalityLearningEnabled(): boolean {
+    if (this.#hosted) return this.#hosted.settings.personalityLearning === true
+
     return this.env.HOF_PERSONALITY_LEARNING_ENABLED?.trim().toLowerCase() === 'true'
   }
 
   private minimalOperationsEnabled(): boolean {
+    if (this.#hosted) return this.#hosted.settings.minimalOperations === true
+
     return this.env.HOF_MINIMAL_OPERATIONS?.trim().toLowerCase() === 'true'
   }
 

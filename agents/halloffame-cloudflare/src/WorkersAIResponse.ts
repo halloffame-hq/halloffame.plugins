@@ -1,6 +1,9 @@
+import type { ModelUsage } from './types'
+
 export interface NormalizedModelResponse {
   text: string
   toolCalls: unknown[]
+  usage: ModelUsage
 }
 
 export class WorkersAIResponse {
@@ -17,6 +20,21 @@ export class WorkersAIResponse {
     return {
       text: this.text(content),
       toolCalls: this.toolCalls(result.tool_calls ?? message.tool_calls),
+      usage: this.usage(this.record(result.usage ?? envelope.usage)),
+    }
+  }
+
+  /** Token counts, in either the OpenAI-style or the input/output naming. */
+  private usage(value: Record<string, unknown>): ModelUsage {
+    const count = (...keys: string[]) => {
+      const found = keys.map((key) => value[key]).find((entry) => typeof entry === 'number')
+
+      return typeof found === 'number' ? found : 0
+    }
+
+    return {
+      inputTokens: count('prompt_tokens', 'input_tokens'),
+      outputTokens: count('completion_tokens', 'output_tokens'),
     }
   }
 
