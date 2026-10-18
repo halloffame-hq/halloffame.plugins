@@ -103,7 +103,6 @@ export interface HostedRun {
   eventsPath: string
   /** The platform's choice of model, or null for the runtime default. */
   model: string | null
-  instructions: string | null
   settings: {
     minimalOperations?: boolean
     personalityLearning?: boolean

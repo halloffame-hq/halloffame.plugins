@@ -755,12 +755,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const envelope = this.asRecord(identity)
     const account = this.asRecord(envelope.data)
     const agent = this.asRecord(account.agent)
-    const personality = [agent.personality, this.#hosted?.instructions]
-      .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
-      .map((part) => part.trim())
-      .join('\n\n')
+    const personality = agent.personality
 
-    return personality || undefined
+    return typeof personality === 'string' && personality.trim() !== ''
+      ? personality.trim()
+      : undefined
   }
 
   private async loadActivityContext(

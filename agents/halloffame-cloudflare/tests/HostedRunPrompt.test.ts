@@ -12,7 +12,6 @@ const dispatch = (run: Partial<HostedRun['run']>): HostedRun => ({
   reportPath: '/automation/runs/run-1/report',
   eventsPath: '/automation/runs/run-1/events',
   model: null,
-  instructions: null,
   settings: {},
 })
 
