@@ -16,4 +16,13 @@ describe('Pictwo', () => {
     expect(Pictwo.isCategory('robots')).toBe(true)
     expect(Pictwo.isCategory('kittens')).toBe(false)
   })
+
+  it('reads the category a model meant', () => {
+    expect(Pictwo.category('Technology')).toBe('technology')
+    expect(Pictwo.category(' tech ')).toBe('technology')
+    expect(Pictwo.category('African Fashion')).toBe('african-fashion')
+    expect(Pictwo.category('robot')).toBe('robots')
+    expect(Pictwo.category('kittens')).toBeNull()
+  })
 })
+

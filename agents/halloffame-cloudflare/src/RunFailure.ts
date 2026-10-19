@@ -10,6 +10,11 @@ export class RunFailure extends Error {
 
   /** The steps as a Markdown list, for the run's report. */
   trail(): string | null {
-    return this.steps.length ? this.steps.map((step) => `- ${step}`).join('\n') : null
+    return RunFailure.trailOf(this.steps)
+  }
+
+  /** Steps a run took as a Markdown list, or null when it took none. */
+  static trailOf(steps: string[]): string | null {
+    return steps.length ? steps.map((step) => `- ${step}`).join('\n') : null
   }
 }

@@ -95,11 +95,13 @@ const tools = [
           description: 'Any other reusable public HTTPS image.',
         },
         context: {
-          type: ['string', 'null'],
-          enum: ['post', 'status', null],
+          type: 'string',
+          enum: ['post', 'status', 'profile'],
+          description:
+            'post for a Post, status for a Story, profile for a profile picture or cover.',
         },
       },
-      required: ['context'],
+      required: [],
     },
   },
   {
@@ -297,7 +299,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     let report: Record<string, unknown>
 
     try {
-      const { summary } =
+      const result: { summary: string; steps?: string[] } =
         dispatch.run.kind === 'interaction'
           ? await this.answerInteractions(dispatch)
           : await this.run(
@@ -305,8 +307,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
               false,
               dispatch.run.kind === 'scheduled' ? 'activity' : 'instruction',
             )
-      await this.emit('message', summary)
-      report = { status: 'completed', summary }
+      await this.emit('message', result.summary)
+      // The steps follow the agent's own account, so what it says can be checked against what it did.
+      const trail = RunFailure.trailOf(result.steps ?? [])
+      const summary = trail ? `${result.summary}\n\n**Steps**\n\n${trail}` : result.summary
+      report = { status: 'completed', summary: summary.slice(0, 5000) }
     } catch (error) {
       // A failed run still reports the steps it took, so its owner can see where it went.
       const trail = error instanceof RunFailure ? error.trail() : null
@@ -516,7 +521,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     prompt: string,
     preloadActivity = false,
     mode: RunMode = 'activity',
-  ): Promise<{ summary: string }> {
+  ): Promise<{ summary: string; steps: string[] }> {
     let token = await this.requireToken()
     const client = this.createClient()
     const identity = await client.request('GET', '/auth/me', token)
@@ -585,7 +590,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
             ...(activityContext ? { lastActivityChecks: activityContext.checks } : {}),
           })
 
-          return { summary }
+          return { summary, steps }
         }
 
         messages.push({
@@ -691,14 +696,15 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     if (call.name === 'halloffame_media_upload') {
       const sourceUrl = this.mediaSourceFrom(args)
-      const context = args.context ?? null
-
-      if (!sourceUrl || (context !== 'post' && context !== 'status' && context !== null)) {
+      if (!sourceUrl) {
         throw new Error(
-          'Invalid Hall Of Fame media tool arguments. Pass pictwo_category with pictwo_seed, or source_url.',
+          args.pictwo_category !== undefined
+            ? `pictwo_category must be one of: ${PICTWO_CATEGORIES.join(', ')}.`
+            : 'Pass pictwo_category with pictwo_seed, or a source_url.',
         )
       }
 
+      const context = this.mediaContext(args.context)
       const uploaded = await client.fetchAndUploadMedia(sourceUrl, context, token)
       await this.images().used(sourceUrl)
 
@@ -869,20 +875,34 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
    * The image a media upload fetches: the named Pictwo photo, or the URL given.
    */
   private mediaSourceFrom(args: Record<string, unknown>): string | null {
-    if (Pictwo.isCategory(args.pictwo_category)) {
+    if (typeof args.source_url === 'string' && /^https:\/\//u.test(args.source_url.trim())) {
+      return args.source_url.trim()
+    }
+
+    const category = Pictwo.category(args.pictwo_category)
+    if (category) {
       const shape =
         typeof args.pictwo_shape === 'string' && args.pictwo_shape in PICTWO_SHAPES
           ? (args.pictwo_shape as keyof typeof PICTWO_SHAPES)
           : 'landscape'
 
       return Pictwo.url(
-        args.pictwo_category,
+        category,
         typeof args.pictwo_seed === 'string' ? args.pictwo_seed : '',
         shape,
       )
     }
 
-    return typeof args.source_url === 'string' && args.source_url.trim() ? args.source_url : null
+    return null
+  }
+
+  /** Where an upload will be used, read leniently: anything but a Post or Story is profile media. */
+  private mediaContext(value: unknown): 'post' | 'status' | null {
+    const context = typeof value === 'string' ? value.trim().toLowerCase() : ''
+    if (context === 'post') return 'post'
+    if (context === 'status' || context === 'story') return 'status'
+
+    return null
   }
 
   private viewableImage(url: unknown): url is string {

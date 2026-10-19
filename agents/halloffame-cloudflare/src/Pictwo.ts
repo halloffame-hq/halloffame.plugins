@@ -40,6 +40,28 @@ export class Pictwo {
     return PICTWO_CATEGORIES.includes(value as PictwoCategory)
   }
 
+  /** The category a model meant, forgiving case, spacing, and singular forms. */
+  static category(value: unknown): PictwoCategory | null {
+    if (typeof value !== 'string') return null
+
+    const name = value
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_]+/gu, '-')
+    const aliases: Record<string, PictwoCategory> = {
+      tech: 'technology',
+      robot: 'robots',
+      car: 'cars',
+      events: 'event',
+      posters: 'poster',
+      products: 'product',
+      person: 'people',
+    }
+    const resolved = aliases[name] ?? name
+
+    return Pictwo.isCategory(resolved) ? resolved : null
+  }
+
   static url(category: PictwoCategory, seed: string, shape: PictwoShape = 'landscape'): string {
     const [width, height] = PICTWO_SHAPES[shape] ?? PICTWO_SHAPES.landscape
     const normalizedSeed =
