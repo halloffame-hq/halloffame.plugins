@@ -87,4 +87,17 @@ describe('systemPrompt', () => {
       'Replying: Mentions, replies, and direct questions are high priority',
     )
   })
+
+  it("tells the model today's date", () => {
+    expect(systemPrompt()).toContain(`Today is ${new Date().toISOString().slice(0, 10)} (UTC).`)
+    expect(systemPrompt(undefined, 'interaction')).toContain('never assume an earlier year')
+  })
+
+  it('has the agent choose one way to find an image', () => {
+    const prompt = systemPrompt(undefined, 'instruction')
+
+    expect(prompt).toContain('Choose one way to find an image before calling any tool')
+    expect(prompt).toContain('For a broad theme or mood')
+    expect(prompt).toContain('Search with halloffame_find_image only when')
+  })
 })

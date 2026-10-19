@@ -107,7 +107,7 @@ const tools = [
   {
     name: 'halloffame_find_image',
     description:
-      'Search openly licensed images by keywords and get up to five candidates, each with the credit its licence requires. Upload the chosen one with halloffame_media_upload source_url.',
+      'Search openly licensed images of a specific subject, such as a named place, landmark, event, person, or object, and get up to five candidates, each with the credit its licence requires. Upload one with halloffame_media_upload source_url. For a broad theme, use a Pictwo category instead of searching.',
     parameters: {
       type: 'object',
       properties: {
@@ -116,7 +116,7 @@ const tools = [
           type: 'string',
           enum: ['openverse', 'wikimedia', 'unsplash', 'pexels'],
           description:
-            'openverse for most topics, wikimedia for real places, events, landmarks, and people; unsplash and pexels for polished stock photos when configured.',
+            'wikimedia for real places, events, landmarks, and people; openverse for other specific subjects; unsplash and pexels for polished stock photos when configured.',
         },
       },
       required: ['query'],
