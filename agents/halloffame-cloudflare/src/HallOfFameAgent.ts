@@ -20,6 +20,7 @@ import { MinimalInteractionPolicy } from './MinimalInteractionPolicy'
 import { PICTWO_CATEGORIES, PICTWO_SHAPES, Pictwo } from './Pictwo'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
+import { RunFailure } from './RunFailure'
 import { SocialMemory } from './SocialMemory'
 import { StructuredReplies } from './StructuredReplies'
 import { WorkersAIResponse } from './WorkersAIResponse'
@@ -213,17 +214,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     messages: Record<string, unknown>[],
     schema: Record<string, unknown>,
   ): Promise<unknown> {
-    const rawResult = await this.env.AI.run(
-      this.model<keyof AiModels>(),
-      {
-        messages,
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'automation_replies', strict: true, schema },
-        },
-        max_tokens: MAX_OUTPUT_TOKENS,
-      } as never,
-    )
+    const rawResult = await this.env.AI.run(this.model<keyof AiModels>(), {
+      messages,
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'automation_replies', strict: true, schema },
+      },
+      max_tokens: MAX_OUTPUT_TOKENS,
+    } as never)
     const response = new WorkersAIResponse(rawResult)
     this.countUsage(response.normalize().usage)
 
@@ -247,9 +245,17 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   /** A plain account of one tool step, for whoever is watching the run. */
   private describeStep(call: ToolCall): string {
     const args = this.asRecord(call.arguments)
-    if (call.name === 'halloffame_media_upload') return 'Uploaded an image.'
+    if (call.name === 'halloffame_media_upload') {
+      const source = this.mediaSourceFrom(args)
+
+      return source
+        ? `Uploaded an image from ${source}`
+        : 'Tried to upload an image without a source.'
+    }
     if (call.name === 'halloffame_memory') return 'Updated its memory.'
-    if (call.name === 'halloffame_find_image') return 'Searched for images.'
+    if (call.name === 'halloffame_find_image') {
+      return `Searched ${typeof args.source === 'string' ? args.source : 'openverse'} for images of "${String(args.query ?? '')}"`
+    }
     if (call.name === 'halloffame_view_image') return 'Looked at an image.'
 
     const verbs: Record<string, string> = {
@@ -295,14 +301,20 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         dispatch.run.kind === 'interaction'
           ? await this.answerInteractions(dispatch)
           : await this.run(
-            HostedRunPrompt.for(dispatch),
-            false,
-            dispatch.run.kind === 'scheduled' ? 'activity' : 'instruction',
-          )
+              HostedRunPrompt.for(dispatch),
+              false,
+              dispatch.run.kind === 'scheduled' ? 'activity' : 'instruction',
+            )
       await this.emit('message', summary)
       report = { status: 'completed', summary }
     } catch (error) {
-      report = { status: 'failed', error: this.errorMessage(error).slice(0, 255) }
+      // A failed run still reports the steps it took, so its owner can see where it went.
+      const trail = error instanceof RunFailure ? error.trail() : null
+      report = {
+        status: 'failed',
+        error: this.errorMessage(error).slice(0, 255),
+        ...(trail ? { summary: trail.slice(0, 5000) } : {}),
+      }
     }
 
     try {
@@ -537,10 +549,23 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       },
     ]
     let visionImage: string | undefined
+    const steps: string[] = []
 
     try {
       for (let step = 0; step < MAX_TOOL_STEPS; step += 1) {
-        const result = await this.requestModel(messages, visionImage)
+        // Near the limit the model is told to finish; on the last turn it can only answer.
+        const remaining = MAX_TOOL_STEPS - step
+        const finalTurn = remaining === 1
+        if (remaining === 3 || finalTurn) {
+          messages.push({
+            role: 'system',
+            content: finalTurn
+              ? 'This is your last turn and no tools remain. Return a short factual summary of what was done and what was not.'
+              : 'Only two tool steps remain. Finish the task now with what you have: publish it, or stop and summarize.',
+          })
+        }
+
+        const result = await this.requestModel(messages, visionImage, !finalTurn)
         visionImage = undefined
         const calls = this.parseToolCalls(result.toolCalls)
 
@@ -573,6 +598,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
           const output = call.argumentError
             ? { error: call.argumentError, retriable: true }
             : await this.executeToolSafely(call, token, memory, minimalPolicy)
+          const failure = this.asRecord(output).error
+          steps.push(
+            `${this.describeStep(call)}${typeof failure === 'string' ? ` (failed: ${failure.slice(0, 160)})` : ''}`,
+          )
           await this.emit('progress', this.describeStep(call))
           messages.push({
             role: 'tool',
@@ -589,35 +618,33 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown activity-cycle error.'
       this.setState({ ...this.state, lastActivityAt: new Date().toISOString(), lastError: message })
-      throw error
+      throw error instanceof RunFailure ? error : new RunFailure(message, steps)
     }
   }
 
   private async requestModel(
     messages: ModelMessage[],
     visionImage?: string,
+    withTools = true,
   ): Promise<ReturnType<WorkersAIResponse['normalize']>> {
     for (let attempt = 0; attempt <= MAX_EMPTY_MODEL_RETRIES; attempt += 1) {
       const retryInstruction =
         attempt > 0
           ? [
-            {
-              role: 'system',
-              content:
-                'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
-            },
-          ]
+              {
+                role: 'system',
+                content:
+                  'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
+              },
+            ]
           : []
-      const rawResult = await this.env.AI.run(
-        this.model<keyof AiModels>(),
-        {
-          messages: [...messages, ...retryInstruction],
-          tools,
-          max_tokens: MAX_OUTPUT_TOKENS,
-          // A retry goes without the image, in case the model could not take it.
-          ...(visionImage && attempt === 0 ? { image: visionImage } : {}),
-        } as never,
-      )
+      const rawResult = await this.env.AI.run(this.model<keyof AiModels>(), {
+        messages: [...messages, ...retryInstruction],
+        ...(withTools ? { tools } : {}),
+        max_tokens: MAX_OUTPUT_TOKENS,
+        // A retry goes without the image, in case the model could not take it.
+        ...(visionImage && attempt === 0 ? { image: visionImage } : {}),
+      } as never)
       const result = new WorkersAIResponse(rawResult).normalize()
       this.countUsage(result.usage)
       if (result.text || result.toolCalls.length > 0) return result
@@ -958,12 +985,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   ): Promise<ActivityContext> {
     const sources = this.minimalOperationsEnabled()
       ? {
-        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-      }
+          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+        }
       : {
-        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-        mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
-      }
+          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+          mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+        }
 
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {
