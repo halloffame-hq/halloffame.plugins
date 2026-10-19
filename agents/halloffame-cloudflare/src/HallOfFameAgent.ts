@@ -30,8 +30,7 @@ const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
 const MAX_EMPTY_MODEL_RETRIES = 2
 const MAX_REQUEST_FAILURES = 20
-/** Room for a reasoning model to think and still finish the structured answer. */
-const MAX_STRUCTURED_TOKENS = 4096
+const MAX_OUTPUT_TOKENS = 4096
 
 /** Instances named with this prefix run accounts for the platform rather than for an operator. */
 export const HOSTED_PREFIX = 'automation-'
@@ -215,14 +214,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     schema: Record<string, unknown>,
   ): Promise<unknown> {
     const rawResult = await this.env.AI.run(
-      this.model() as keyof AiModels,
+      this.model<keyof AiModels>(),
       {
         messages,
         response_format: {
           type: 'json_schema',
           json_schema: { name: 'automation_replies', strict: true, schema },
         },
-        max_tokens: MAX_STRUCTURED_TOKENS,
+        max_tokens: MAX_OUTPUT_TOKENS,
       } as never,
     )
     const response = new WorkersAIResponse(rawResult)
@@ -263,8 +262,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return `${verbs[String(args.method)] ?? 'Called'} ${String(args.path ?? '')}`.trim()
   }
 
-  private model(): string {
-    return this.#hosted?.model || this.env.HOF_MODEL || DEFAULT_MODEL
+  private model<X extends string = string>(): X {
+    return (this.#hosted?.model || this.env.HOF_MODEL || DEFAULT_MODEL) as X
   }
 
   private countUsage(usage: ModelUsage): void {
@@ -296,10 +295,10 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         dispatch.run.kind === 'interaction'
           ? await this.answerInteractions(dispatch)
           : await this.run(
-              HostedRunPrompt.for(dispatch),
-              false,
-              dispatch.run.kind === 'scheduled' ? 'activity' : 'instruction',
-            )
+            HostedRunPrompt.for(dispatch),
+            false,
+            dispatch.run.kind === 'scheduled' ? 'activity' : 'instruction',
+          )
       await this.emit('message', summary)
       report = { status: 'completed', summary }
     } catch (error) {
@@ -602,20 +601,21 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       const retryInstruction =
         attempt > 0
           ? [
-              {
-                role: 'system',
-                content:
-                  'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
-              },
-            ]
+            {
+              role: 'system',
+              content:
+                'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
+            },
+          ]
           : []
       const rawResult = await this.env.AI.run(
-        this.model() as keyof AiModels,
+        this.model<keyof AiModels>(),
         {
           messages: [...messages, ...retryInstruction],
           tools,
-          max_tokens: 1024,
-          ...(visionImage ? { image: visionImage } : {}),
+          max_tokens: MAX_OUTPUT_TOKENS,
+          // A retry goes without the image, in case the model could not take it.
+          ...(visionImage && attempt === 0 ? { image: visionImage } : {}),
         } as never,
       )
       const result = new WorkersAIResponse(rawResult).normalize()
@@ -958,12 +958,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   ): Promise<ActivityContext> {
     const sources = this.minimalOperationsEnabled()
       ? {
-          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-        }
+        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+      }
       : {
-          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-          mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
-        }
+        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+        mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+      }
 
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {
