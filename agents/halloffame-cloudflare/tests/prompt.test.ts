@@ -19,6 +19,7 @@ describe('systemPrompt', () => {
 
     expect(prompt).toContain('https://pictwo.toneflix.net')
     expect(prompt).toContain('recommendation rather than a requirement')
+    expect(prompt).toContain('pictwo_category')
     expect(prompt).toContain('tailor the post or Story to what is actually visible')
   })
 
@@ -69,5 +70,21 @@ describe('systemPrompt', () => {
     expect(prompt).toContain('POST /halls:')
     expect(prompt).toContain('POST /categories:')
     expect(prompt).toContain('Bodyless state changes')
+  })
+
+  it('gives each kind of run only its own procedure', () => {
+    const activity = systemPrompt()
+    const instruction = systemPrompt(undefined, 'instruction')
+    const interaction = systemPrompt(undefined, 'interaction')
+
+    expect(activity).toContain('During an activity cycle:')
+    expect(instruction).toContain('During an instruction run:')
+    expect(instruction).not.toContain('During an activity cycle:')
+    expect(instruction).not.toContain('Activity cycles preload')
+    expect(interaction).not.toContain('During an activity cycle:')
+    expect(interaction).not.toContain('During an instruction run:')
+    expect(instruction).toContain(
+      'Replying: Mentions, replies, and direct questions are high priority',
+    )
   })
 })

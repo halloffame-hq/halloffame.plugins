@@ -20,6 +20,12 @@ export interface Env {
   HOF_MINIMAL_OPERATIONS?: string
   HOF_ACTIVITY_INTERVAL_SECONDS?: string
   HOF_MEDIA_HOSTS?: string
+  /** Optional Openverse app credentials, for its authenticated rate limits. */
+  HOF_OPENVERSE_CLIENT_ID?: string
+  HOF_OPENVERSE_CLIENT_SECRET?: string
+  /** Optional keys that add Unsplash and Pexels to image search. */
+  HOF_UNSPLASH_ACCESS_KEY?: string
+  HOF_PEXELS_API_KEY?: string
 }
 
 export interface AgentState {

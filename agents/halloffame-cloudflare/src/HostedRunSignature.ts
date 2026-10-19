@@ -28,8 +28,6 @@ export class HostedRunSignature {
 
     const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body))
 
-    return [
-      ...new Uint8Array(digest)
-    ].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
   }
 }

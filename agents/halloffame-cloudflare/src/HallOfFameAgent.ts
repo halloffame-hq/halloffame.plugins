@@ -7,15 +7,17 @@ import type {
   RequestFailure,
   ToolCall,
 } from './types'
-import { activityPrompt, systemPrompt } from './prompt'
+import { type RunMode, activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
 import { AgentSuspension } from './AgentSuspension'
 import { AuthoredText } from './AuthoredText'
 import { HallOfFameClient } from './HallOfFameClient'
 import { HostedRunPrompt } from './HostedRunPrompt'
+import { ImageSearch, type ImageSource } from './ImageSearch'
 import { InteractionLookup } from './InteractionLookup'
 import { MinimalInteractionPolicy } from './MinimalInteractionPolicy'
+import { PICTWO_CATEGORIES, PICTWO_SHAPES, Pictwo } from './Pictwo'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
 import { SocialMemory } from './SocialMemory'
@@ -67,14 +69,55 @@ const tools = [
   },
   {
     name: 'halloffame_media_upload',
-    description: 'Download one reusable public HTTPS image and upload it to Hall Of Fame.',
+    description:
+      'Upload one image to Hall Of Fame and return its media id. Either name a Pictwo photo with pictwo_category and pictwo_seed, or pass source_url for another reusable public HTTPS image.',
     parameters: {
       type: 'object',
       properties: {
-        source_url: { type: 'string' },
-        context: { type: ['string', 'null'], enum: ['post', 'status', null] },
+        pictwo_category: {
+          type: 'string',
+          enum: [...PICTWO_CATEGORIES],
+          description: 'Pictwo photo category closest to the subject.',
+        },
+        pictwo_seed: {
+          type: 'string',
+          description:
+            'A few words about the subject. The same seed always gives the same photo; change it for another.',
+        },
+        pictwo_shape: {
+          type: 'string',
+          enum: Object.keys(PICTWO_SHAPES),
+          description:
+            'landscape for Posts, banner for a cover, square for a profile picture, portrait for a Story.',
+        },
+        source_url: {
+          type: 'string',
+          description: 'Any other reusable public HTTPS image.',
+        },
+        context: {
+          type: ['string', 'null'],
+          enum: ['post', 'status', null],
+        },
       },
-      required: ['source_url', 'context'],
+      required: ['context'],
+    },
+  },
+  {
+    name: 'halloffame_find_image',
+    description:
+      'Search openly licensed images by keywords and get up to five candidates, each with the credit its licence requires. Upload the chosen one with halloffame_media_upload source_url.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'A few words describing the image wanted.' },
+        source: {
+          type: 'string',
+          enum: ['openverse', 'wikimedia', 'unsplash', 'pexels'],
+          description:
+            'openverse for most topics, wikimedia for real places, events, landmarks, and people; unsplash and pexels for polished stock photos when configured.',
+        },
+      },
+      required: ['query'],
     },
   },
   {
@@ -86,7 +129,7 @@ const tools = [
       properties: {
         url: {
           type: 'string',
-          description: 'HTTPS image URL taken from a fetched resource.'
+          description: 'HTTPS image URL taken from a fetched resource.',
         },
       },
       required: ['url'],
@@ -121,6 +164,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   #hosted: HostedRun | null = null
   #usage: ModelUsage = { inputTokens: 0, outputTokens: 0 }
   #hostedQueue: Promise<void> = Promise.resolve()
+  #imageSearch: ImageSearch | null = null
 
   initialState: AgentState = {
     authenticated: false,
@@ -162,7 +206,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         vision: this.modelSupportsVision(),
       }),
       self: dispatch.account,
-    }).answer(dispatch.run.triggers, systemPrompt(this.personalityFrom(identity)))
+    }).answer(dispatch.run.triggers, systemPrompt(this.personalityFrom(identity), 'interaction'))
   }
 
   /** One model call constrained to a JSON schema; its usage counts toward the run. */
@@ -206,6 +250,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const args = this.asRecord(call.arguments)
     if (call.name === 'halloffame_media_upload') return 'Uploaded an image.'
     if (call.name === 'halloffame_memory') return 'Updated its memory.'
+    if (call.name === 'halloffame_find_image') return 'Searched for images.'
     if (call.name === 'halloffame_view_image') return 'Looked at an image.'
 
     const verbs: Record<string, string> = {
@@ -250,7 +295,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       const { summary } =
         dispatch.run.kind === 'interaction'
           ? await this.answerInteractions(dispatch)
-          : await this.run(HostedRunPrompt.for(dispatch))
+          : await this.run(
+              HostedRunPrompt.for(dispatch),
+              false,
+              dispatch.run.kind === 'scheduled' ? 'activity' : 'instruction',
+            )
       await this.emit('message', summary)
       report = { status: 'completed', summary }
     } catch (error) {
@@ -309,7 +358,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
             return Response.json({ error: 'A non-empty prompt is required.' }, { status: 422 })
           }
 
-          return Response.json(await this.run(input.prompt))
+          return Response.json(await this.run(input.prompt, false, 'instruction'))
         case 'create-post':
           return Response.json(await this.directRequest('POST', '/posts', input.data))
         case 'create-story':
@@ -452,7 +501,11 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     return this.run(activityPrompt, true)
   }
 
-  async run(prompt: string, preloadActivity = false): Promise<{ summary: string }> {
+  async run(
+    prompt: string,
+    preloadActivity = false,
+    mode: RunMode = 'activity',
+  ): Promise<{ summary: string }> {
     let token = await this.requireToken()
     const client = this.createClient()
     const identity = await client.request('GET', '/auth/me', token)
@@ -471,7 +524,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       this.setState({ ...this.state, lastActivityChecks: activityContext.checks })
     }
     const messages: ModelMessage[] = [
-      { role: 'system', content: systemPrompt(personality) },
+      { role: 'system', content: systemPrompt(personality, mode) },
       {
         role: 'system',
         content: `Authenticated Hall Of Fame account state for this cycle:\n${JSON.stringify(identity)}`,
@@ -549,12 +602,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       const retryInstruction =
         attempt > 0
           ? [
-            {
-              role: 'system',
-              content:
-                'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
-            },
-          ]
+              {
+                role: 'system',
+                content:
+                  'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
+              },
+            ]
           : []
       const rawResult = await this.env.AI.run(
         this.model() as keyof AiModels,
@@ -610,21 +663,37 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
 
     if (call.name === 'halloffame_media_upload') {
-      const sourceUrl = args.source_url
-      const context = args.context
+      const sourceUrl = this.mediaSourceFrom(args)
+      const context = args.context ?? null
 
-      if (
-        typeof sourceUrl !== 'string' ||
-        (context !== 'post' && context !== 'status' && context !== null)
-      ) {
-        throw new Error('Invalid Hall Of Fame media tool arguments.')
+      if (!sourceUrl || (context !== 'post' && context !== 'status' && context !== null)) {
+        throw new Error(
+          'Invalid Hall Of Fame media tool arguments. Pass pictwo_category with pictwo_seed, or source_url.',
+        )
       }
 
-      return client.fetchAndUploadMedia(sourceUrl, context, token)
+      const uploaded = await client.fetchAndUploadMedia(sourceUrl, context, token)
+      await this.images().used(sourceUrl)
+
+      return uploaded
+    }
+
+    if (call.name === 'halloffame_find_image') {
+      if (typeof args.query !== 'string') throw new Error('A search query is required.')
+
+      const images = this.images()
+      const candidates = await images.find(args.query, args.source as ImageSource | undefined)
+
+      return {
+        images: candidates,
+        sources: images.sources(),
+        next: 'Upload one with halloffame_media_upload source_url. When its credit is not null, publish that credit with it.',
+      }
     }
 
     if (call.name === 'halloffame_view_image') {
-      if (!this.modelSupportsVision()) return { viewed: false, reason: 'The model cannot see images.' }
+      if (!this.modelSupportsVision())
+        return { viewed: false, reason: 'The model cannot see images.' }
       if (!this.viewableImage(args.url)) throw new Error('An HTTPS image URL is required.')
 
       return { viewed: true }
@@ -719,7 +788,8 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         } catch {
           // Answered as a tool error so the model can correct the call instead of ending the run.
           parsedArguments = {}
-          argumentError = 'The tool arguments were not valid JSON. Send the call again with a valid JSON object.'
+          argumentError =
+            'The tool arguments were not valid JSON. Send the call again with a valid JSON object.'
         }
       }
 
@@ -732,12 +802,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     })
   }
 
-  /** 
-   * The image the model sees on its next turn: one it uploaded, 
-   * or one it asked to look at. 
-   * 
-   * @param call 
-   * @returns 
+  /**
+   * The image the model sees on its next turn: one it uploaded,
+   * or one it asked to look at.
+   *
+   * @param call
+   * @returns
    */
   private visionImageFrom(call: ToolCall): string | undefined {
     if (!this.modelSupportsVision()) return undefined
@@ -745,12 +815,47 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const args = this.asRecord(call.arguments)
     const url =
       call.name === 'halloffame_media_upload'
-        ? args.source_url
+        ? this.mediaSourceFrom(args)
         : call.name === 'halloffame_view_image'
           ? args.url
           : undefined
 
     return this.viewableImage(url) ? url : undefined
+  }
+
+  /** Image search for this instance, keeping what it found so a used image can be reported. */
+  private images(): ImageSearch {
+    this.#imageSearch ??= new ImageSearch({
+      openverse: {
+        clientId: this.env.HOF_OPENVERSE_CLIENT_ID,
+        clientSecret: this.env.HOF_OPENVERSE_CLIENT_SECRET,
+      },
+      unsplashKey: this.env.HOF_UNSPLASH_ACCESS_KEY,
+      pexelsKey: this.env.HOF_PEXELS_API_KEY,
+      userAgent: this.createClient().userAgent(),
+    })
+
+    return this.#imageSearch
+  }
+
+  /**
+   * The image a media upload fetches: the named Pictwo photo, or the URL given.
+   */
+  private mediaSourceFrom(args: Record<string, unknown>): string | null {
+    if (Pictwo.isCategory(args.pictwo_category)) {
+      const shape =
+        typeof args.pictwo_shape === 'string' && args.pictwo_shape in PICTWO_SHAPES
+          ? (args.pictwo_shape as keyof typeof PICTWO_SHAPES)
+          : 'landscape'
+
+      return Pictwo.url(
+        args.pictwo_category,
+        typeof args.pictwo_seed === 'string' ? args.pictwo_seed : '',
+        shape,
+      )
+    }
+
+    return typeof args.source_url === 'string' && args.source_url.trim() ? args.source_url : null
   }
 
   private viewableImage(url: unknown): url is string {
@@ -853,12 +958,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   ): Promise<ActivityContext> {
     const sources = this.minimalOperationsEnabled()
       ? {
-        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-      }
+          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+        }
       : {
-        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-        mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
-      }
+          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+          mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+        }
 
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {

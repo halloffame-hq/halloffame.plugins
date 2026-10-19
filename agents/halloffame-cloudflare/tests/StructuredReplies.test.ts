@@ -23,7 +23,11 @@ const trigger = (overrides: Partial<HostedTrigger> = {}): HostedTrigger => ({
 function fakeApi(refuseReplies = false, replyTo: Record<string, unknown> | null = null) {
   const writes: Array<{ method: HttpMethod; path: string; body?: unknown }> = []
   const comments: Record<string, Record<string, unknown>> = {
-    'comment-1': { id: 'comment-1', comment: 'Top level', user: { id: 'kwel-id', username: 'kwel' } },
+    'comment-1': {
+      id: 'comment-1',
+      comment: 'Top level',
+      user: { id: 'kwel-id', username: 'kwel' },
+    },
     'comment-9': {
       id: 'comment-9',
       comment: 'What do you think?',

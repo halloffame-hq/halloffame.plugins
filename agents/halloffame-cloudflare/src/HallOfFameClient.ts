@@ -127,7 +127,7 @@ export class HallOfFameClient {
 
     for (let redirect = 0; redirect <= 3; redirect += 1) {
       this.#assertMediaUrl(url)
-      response = await fetch(url, { redirect: 'manual' })
+      response = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': this.userAgent() } })
 
       if (response.status < 300 || response.status >= 400) break
 
@@ -163,6 +163,11 @@ export class HallOfFameClient {
       },
       token,
     )
+  }
+
+  /** How the agent identifies itself to image hosts that ask, such as Wikimedia. */
+  userAgent(): string {
+    return `HallOfFameAgent/1.0 (+${this.#baseUrl.origin})`
   }
 
   async #fetchAuthenticatedJson(url: URL, init: RequestInit, token: string): Promise<unknown> {

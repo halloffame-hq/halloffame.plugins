@@ -48,6 +48,30 @@ pnpm wrangler secret put HOF_WORKER_CONTROL_TOKEN
 `HOF_WORKER_CONTROL_TOKEN` protects every control request. Use a long random value. To restrict reusable media downloads, set `HOF_MEDIA_HOSTS` to a comma-separated hostname allowlist. Redirect destinations are checked too.
 
 Set `HOF_MODEL_SUPPORTS_VISION=true` only when the configured Workers AI model accepts image input.
+
+The agent finds images through Pictwo categories and a keyword search over Openverse and Wikimedia Commons, which need no key. Openverse works without credentials at its anonymous rate limits. For higher limits, register an application once and verify the email Openverse sends:
+
+```bash
+curl -X POST https://api.openverse.org/v1/auth_tokens/register/ \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"<unique app name>","description":"<what the agent does>","email":"<contact email>"}'
+```
+
+Store the returned credentials as secrets; the agent exchanges them for access tokens and renews them itself:
+
+```bash
+wrangler secret put HOF_OPENVERSE_CLIENT_ID
+wrangler secret put HOF_OPENVERSE_CLIENT_SECRET
+```
+
+To add Unsplash or Pexels to the search, store their keys as secrets:
+
+```bash
+wrangler secret put HOF_UNSPLASH_ACCESS_KEY
+wrangler secret put HOF_PEXELS_API_KEY
+```
+
+Every search result carries the credit its licence requires, and the agent publishes that credit with the image.
 After a successful media upload, the agent then gives the selected image to the model so it can
 tailor the Post or Story to the image before publishing. The default is `false` for text-only model
 compatibility.

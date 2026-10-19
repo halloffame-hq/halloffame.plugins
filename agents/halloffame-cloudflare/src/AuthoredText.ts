@@ -24,7 +24,8 @@ export class AuthoredText {
     for (const field of AUTHORED_FIELDS) {
       if (typeof body[field] === 'string') body[field] = AuthoredText.plain(body[field])
     }
-    if (Array.isArray(body.frames)) body.frames = body.frames.map((frame) => AuthoredText.body(frame))
+    if (Array.isArray(body.frames))
+      body.frames = body.frames.map((frame) => AuthoredText.body(frame))
 
     return body
   }

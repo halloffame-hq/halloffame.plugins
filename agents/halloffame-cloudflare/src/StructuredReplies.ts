@@ -76,7 +76,7 @@ export const REPLY_SCHEMA = {
  * again: an interaction run may only act on the Posts it was asked about.
  */
 export class StructuredReplies {
-  constructor(private readonly options: StructuredRepliesOptions) { }
+  constructor(private readonly options: StructuredRepliesOptions) {}
 
   async answer(triggers: HostedTrigger[], systemPrompt: string): Promise<{ summary: string }> {
     const { contexts, images } = await this.collect(triggers)
@@ -160,15 +160,15 @@ export class StructuredReplies {
         content:
           withImages && images.length
             ? [
-              { type: 'text', text: JSON.stringify(contexts) },
-              ...images.flatMap((image) => [
-                {
-                  type: 'text',
-                  text: `Picture for interaction ${image.index}, from its ${image.source}:`,
-                },
-                { type: 'image_url', image_url: { url: image.dataUrl } },
-              ]),
-            ]
+                { type: 'text', text: JSON.stringify(contexts) },
+                ...images.flatMap((image) => [
+                  {
+                    type: 'text',
+                    text: `Picture for interaction ${image.index}, from its ${image.source}:`,
+                  },
+                  { type: 'image_url', image_url: { url: image.dataUrl } },
+                ]),
+              ]
             : JSON.stringify(withImages ? contexts : StructuredReplies.unviewed(contexts)),
       },
     ]
@@ -198,12 +198,12 @@ export class StructuredReplies {
     return contexts.map((context) =>
       context.background
         ? {
-          ...context,
-          background: {
-            ...context.background,
-            images: context.background.images.map((image) => ({ ...image, viewed: false })),
-          },
-        }
+            ...context,
+            background: {
+              ...context.background,
+              images: context.background.images.map((image) => ({ ...image, viewed: false })),
+            },
+          }
         : context,
     )
   }

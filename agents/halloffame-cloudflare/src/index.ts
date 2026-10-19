@@ -30,10 +30,10 @@ async function authorized(request: Request, expectedToken: string): Promise<bool
  * A platform automation run from the Hall Of Fame API. The body is signed
  * with the shared secret; the run goes to that account's own instance and is
  * answered at once, carried out in the background.
- * 
- * @param request 
- * @param env 
- * @returns 
+ *
+ * @param request
+ * @param env
+ * @returns
  */
 async function acceptHostedRun(request: Request, env: Env): Promise<Response> {
   const body = await request.text()
