@@ -517,7 +517,9 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         })
 
         for (const call of calls) {
-          const output = await this.executeToolSafely(call, token, memory, minimalPolicy)
+          const output = call.argumentError
+            ? { error: call.argumentError, retriable: true }
+            : await this.executeToolSafely(call, token, memory, minimalPolicy)
           await this.emit('progress', this.describeStep(call))
           messages.push({
             role: 'tool',
@@ -709,11 +711,14 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       if (typeof name !== 'string') throw new Error('Workers AI returned an invalid tool call.')
 
       let parsedArguments = rawArguments
+      let argumentError: string | undefined
       if (typeof rawArguments === 'string') {
         try {
           parsedArguments = JSON.parse(rawArguments)
         } catch {
-          throw new Error('Workers AI returned invalid tool arguments.')
+          // Answered as a tool error so the model can correct the call instead of ending the run.
+          parsedArguments = {}
+          argumentError = 'The tool arguments were not valid JSON. Send the call again with a valid JSON object.'
         }
       }
 
@@ -721,6 +726,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         id: typeof value.id === 'string' ? value.id : undefined,
         name,
         arguments: parsedArguments,
+        ...(argumentError ? { argumentError } : {}),
       }
     })
   }

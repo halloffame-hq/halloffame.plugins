@@ -73,6 +73,8 @@ export interface ToolCall {
   id?: string
   name: string
   arguments: unknown
+  /** Why the model's arguments could not be read; the call is answered with this error. */
+  argumentError?: string
 }
 
 /** An interaction that asked a platform-run account to act. */
