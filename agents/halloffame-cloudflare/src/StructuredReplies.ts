@@ -1,4 +1,5 @@
 import type { HostedTrigger, HttpMethod } from './types'
+import type { InteractionBackground, InteractionLookup, LookupImage } from './InteractionLookup'
 
 const REACTIONS = ['like', 'love', 'haha', 'wow', 'sad', 'angry'] as const
 const MAX_REPLY_LENGTH = 1000
@@ -11,6 +12,7 @@ interface InteractionContext {
   trigger: HostedTrigger
   post: { text: string; author: string | null }
   comment: { id: string; text: string; author: string | null } | null
+  background?: InteractionBackground
 }
 
 /** What the model decided for one interaction, once checked. */
@@ -26,6 +28,8 @@ export interface StructuredRepliesOptions {
   request: (method: HttpMethod, path: string, body?: unknown) => Promise<unknown>
   /** Ask the model once, constrained to a JSON schema. */
   ask: (messages: Record<string, unknown>[], schema: Record<string, unknown>) => Promise<unknown>
+  /** Gathers what each interaction refers to before it is answered. */
+  lookup?: InteractionLookup
 }
 
 /** The answer the model must give: a decision per interaction and a summary. */
@@ -60,22 +64,11 @@ export const REPLY_SCHEMA = {
  * again: an interaction run may only act on the Posts it was asked about.
  */
 export class StructuredReplies {
-  constructor(private readonly options: StructuredRepliesOptions) {}
+  constructor(private readonly options: StructuredRepliesOptions) { }
 
   async answer(triggers: HostedTrigger[], systemPrompt: string): Promise<{ summary: string }> {
-    const contexts = await this.collect(triggers)
-    const raw = await this.options.ask(
-      [
-        { role: 'system', content: systemPrompt },
-        {
-          role: 'system',
-          content:
-            'Decide what to do about each interaction below. Reply with one concise, genuine answer when you have something meaningful to add, react when a reaction says enough, and skip spam, abuse, or anything that needs no answer. Be careful with other agent accounts and never keep an exchange going for its own sake. Answer only in the required JSON.',
-        },
-        { role: 'user', content: JSON.stringify(contexts) },
-      ],
-      REPLY_SCHEMA,
-    )
+    const { contexts, images } = await this.collect(triggers)
+    const raw = await this.decide(systemPrompt, contexts, images)
     const { decisions, summary } = StructuredReplies.decisions(raw, contexts.length)
 
     const outcomes: string[] = []
@@ -98,6 +91,74 @@ export class StructuredReplies {
         .filter(Boolean)
         .join(' '),
     }
+  }
+
+  /**
+   * One structured call over every interaction. Pictures go with it when the
+   * model can see them; a model that refuses them is asked again without.
+   */
+  private async decide(
+    systemPrompt: string,
+    contexts: InteractionContext[],
+    images: Array<LookupImage & { index: number }>,
+  ): Promise<unknown> {
+    const messages = (withImages: boolean) => [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'system',
+        content: [
+          'Decide what to do about each interaction below.',
+          'Each one carries a background: the profiles it mentions, its hashtags, the Post it quotes,',
+          'the thread around a comment, links to this platform, and its pictures.',
+          'Read it before answering, and answer what the person actually said.',
+          'Pictures marked viewed are attached in order; describe only what is visible in them.',
+          'Never claim to have seen a picture that is not attached.',
+          'Reply with one concise, genuine answer when you have something meaningful to add,',
+          'react when a reaction says enough, and skip spam, abuse, or anything that needs no answer.',
+          'Be careful with other agent accounts and never keep an exchange going for its own sake.',
+          'Answer only in the required JSON.',
+        ].join(' '),
+      },
+      {
+        role: 'user',
+        content:
+          withImages && images.length
+            ? [
+              { type: 'text', text: JSON.stringify(contexts) },
+              ...images.flatMap((image) => [
+                {
+                  type: 'text',
+                  text: `Picture for interaction ${image.index}, from its ${image.source}:`,
+                },
+                { type: 'image_url', image_url: { url: image.dataUrl } },
+              ]),
+            ]
+            : JSON.stringify(withImages ? contexts : StructuredReplies.unviewed(contexts)),
+      },
+    ]
+
+    if (!images.length) return await this.options.ask(messages(false), REPLY_SCHEMA)
+
+    try {
+      return await this.options.ask(messages(true), REPLY_SCHEMA)
+    } catch {
+      return await this.options.ask(messages(false), REPLY_SCHEMA)
+    }
+  }
+
+  /** The contexts with every picture marked as not seen, for a call that carries none. */
+  private static unviewed(contexts: InteractionContext[]): InteractionContext[] {
+    return contexts.map((context) =>
+      context.background
+        ? {
+          ...context,
+          background: {
+            ...context.background,
+            images: context.background.images.map((image) => ({ ...image, viewed: false })),
+          },
+        }
+        : context,
+    )
   }
 
   /** The checked decisions from the model's answer: in range, once each, and well formed. */
@@ -131,8 +192,12 @@ export class StructuredReplies {
     }
   }
 
-  private async collect(triggers: HostedTrigger[]): Promise<InteractionContext[]> {
-    return await Promise.all(
+  private async collect(triggers: HostedTrigger[]): Promise<{
+    contexts: InteractionContext[]
+    images: Array<LookupImage & { index: number }>
+  }> {
+    const images: Array<LookupImage & { index: number }> = []
+    const contexts = await Promise.all(
       triggers.map(async (trigger, index) => {
         const post = StructuredReplies.record(
           StructuredReplies.record(
@@ -140,16 +205,17 @@ export class StructuredReplies {
           ).data,
         )
         let comment: InteractionContext['comment'] = null
+        let comments: unknown = []
 
         if (trigger.subjectType === 'comment' && trigger.subjectId) {
           const listed = await this.options.request(
             'GET',
             `/posts/${encodeURIComponent(trigger.postSlug)}/comments`,
           )
-          const found = StructuredReplies.findComment(
-            StructuredReplies.record(listed).data,
-            trigger.subjectId,
-          )
+
+          comments = StructuredReplies.record(listed).data
+          const found = StructuredReplies.findComment(comments, trigger.subjectId)
+
           if (found) {
             comment = {
               id: trigger.subjectId,
@@ -159,6 +225,9 @@ export class StructuredReplies {
           }
         }
 
+        const gathered = await this.options.lookup?.gather(post, comment, comments)
+        images.push(...(gathered?.images ?? []).map((image) => ({ ...image, index })))
+
         return {
           index,
           trigger,
@@ -167,9 +236,12 @@ export class StructuredReplies {
             author: StructuredReplies.author(post.user),
           },
           comment,
+          ...(gathered ? { background: gathered.background } : {}),
         }
       }),
     )
+
+    return { contexts, images }
   }
 
   private async carryOut(decision: ReplyDecision, context: InteractionContext): Promise<void> {

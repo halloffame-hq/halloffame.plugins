@@ -98,11 +98,15 @@ export interface HostedRun {
   account: { id: string; username: string }
   credential: string
   apiBaseUrl: string
+  /** The platform app's origin, whose links the agent follows for context. */
+  appUrl?: string | null
   reportPath: string
   /** Where progress and messages are streamed while the run is under way. */
   eventsPath: string
   /** The platform's choice of model, or null for the runtime default. */
   model: string | null
+  /** Whether that model accepts images. */
+  vision?: boolean
   settings: {
     minimalOperations?: boolean
     personalityLearning?: boolean

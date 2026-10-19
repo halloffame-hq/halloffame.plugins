@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { InteractionLookup } from '../src/InteractionLookup'
 import { StructuredReplies } from '../src/StructuredReplies'
 import type { HostedTrigger, HttpMethod } from '../src/types'
 
@@ -122,5 +123,47 @@ describe('StructuredReplies', () => {
       { index: 1, action: 'skip' },
     ])
     expect(StructuredReplies.decisions('not json', 1).decisions).toEqual([])
+  })
+
+  it('sends the pictures it looked up, and asks again without them when refused', async () => {
+    const api = fakeApi()
+    const attempts: unknown[] = []
+    const replies = new StructuredReplies({
+      request: async (method, path, body) =>
+        method === 'GET' && !path.endsWith('/comments')
+          ? {
+              data: {
+                text: 'Look at this',
+                media: [{ mimetype: 'image/png', thumbnail: 'https://cdn.example/a.png' }],
+              },
+            }
+          : api.request(method, path, body),
+      ask: async (messages) => {
+        const content = messages.at(-1)?.content
+        attempts.push(content)
+        if (Array.isArray(content)) throw new Error('This model does not accept images.')
+
+        return { responses: [{ index: 0, action: 'reply', text: 'Nice.' }], summary: '' }
+      },
+      lookup: new InteractionLookup({
+        request: async () => ({}),
+        appUrl: null,
+        self: null,
+        vision: true,
+        fetchImage: async () =>
+          new Response(new Uint8Array([1]), { headers: { 'Content-Type': 'image/png' } }),
+      }),
+    })
+
+    await replies.answer([trigger()], 'rules')
+
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]).toEqual(
+      expect.arrayContaining([
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,AQ==' } },
+      ]),
+    )
+    expect(String(attempts[1])).toContain('"viewed":false')
+    expect(api.writes).toHaveLength(1)
   })
 })

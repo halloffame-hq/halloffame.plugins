@@ -10,13 +10,14 @@ import type {
 import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
+import { AgentSuspension } from './AgentSuspension'
 import { HallOfFameClient } from './HallOfFameClient'
+import { HostedRunPrompt } from './HostedRunPrompt'
+import { InteractionLookup } from './InteractionLookup'
 import { MinimalInteractionPolicy } from './MinimalInteractionPolicy'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
 import { RequestRetryPolicy } from './RequestRetryPolicy'
 import { SocialMemory } from './SocialMemory'
-import { AgentSuspension } from './AgentSuspension'
-import { HostedRunPrompt } from './HostedRunPrompt'
 import { StructuredReplies } from './StructuredReplies'
 import { WorkersAIResponse } from './WorkersAIResponse'
 
@@ -71,6 +72,21 @@ const tools = [
         context: { type: ['string', 'null'], enum: ['post', 'status', null] },
       },
       required: ['source_url', 'context'],
+    },
+  },
+  {
+    name: 'halloffame_view_image',
+    description:
+      'Look at one image from a Post, comment, or profile you already fetched, before answering about it. Pass its thumbnail or mediaUrl. Works only when the model accepts images; the image is shown to you on your next turn.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'HTTPS image URL taken from a fetched resource.'
+        },
+      },
+      required: ['url'],
     },
   },
   {
@@ -130,10 +146,18 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   private async answerInteractions(dispatch: HostedRun): Promise<{ summary: string }> {
     const client = this.createClient()
     const identity = await client.request('GET', '/auth/me', dispatch.credential)
+    const request = (method: HttpMethod, path: string, body?: unknown) =>
+      client.request(method, path, dispatch.credential, body)
 
     return new StructuredReplies({
-      request: (method, path, body) => client.request(method, path, dispatch.credential, body),
+      request,
       ask: (messages, schema) => this.requestStructured(messages, schema),
+      lookup: new InteractionLookup({
+        request,
+        appUrl: dispatch.appUrl ?? null,
+        self: dispatch.account.username,
+        vision: this.modelSupportsVision(),
+      }),
     }).answer(dispatch.run.triggers, systemPrompt(this.personalityFrom(identity)))
   }
 
@@ -178,6 +202,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const args = this.asRecord(call.arguments)
     if (call.name === 'halloffame_media_upload') return 'Uploaded an image.'
     if (call.name === 'halloffame_memory') return 'Updated its memory.'
+    if (call.name === 'halloffame_view_image') return 'Looked at an image.'
 
     const verbs: Record<string, string> = {
       GET: 'Read',
@@ -518,12 +543,12 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       const retryInstruction =
         attempt > 0
           ? [
-              {
-                role: 'system',
-                content:
-                  'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
-              },
-            ]
+            {
+              role: 'system',
+              content:
+                'The previous model turn was empty. Continue from the existing conversation. Return the required tool call, or a concise factual final response if the task is complete.',
+            },
+          ]
           : []
       const rawResult = await this.env.AI.run(
         this.model() as keyof AiModels,
@@ -590,6 +615,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       }
 
       return client.fetchAndUploadMedia(sourceUrl, context, token)
+    }
+
+    if (call.name === 'halloffame_view_image') {
+      if (!this.modelSupportsVision()) return { viewed: false, reason: 'The model cannot see images.' }
+      if (!this.viewableImage(args.url)) throw new Error('An HTTPS image URL is required.')
+
+      return { viewed: true }
     }
 
     if (call.name === 'halloffame_memory') {
@@ -690,15 +722,38 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     })
   }
 
+  /** 
+   * The image the model sees on its next turn: one it uploaded, 
+   * or one it asked to look at. 
+   * 
+   * @param call 
+   * @returns 
+   */
   private visionImageFrom(call: ToolCall): string | undefined {
-    if (call.name !== 'halloffame_media_upload' || !this.modelSupportsVision()) return undefined
+    if (!this.modelSupportsVision()) return undefined
 
-    const sourceUrl = this.asRecord(call.arguments).source_url
+    const args = this.asRecord(call.arguments)
+    const url =
+      call.name === 'halloffame_media_upload'
+        ? args.source_url
+        : call.name === 'halloffame_view_image'
+          ? args.url
+          : undefined
 
-    return typeof sourceUrl === 'string' ? sourceUrl : undefined
+    return this.viewableImage(url) ? url : undefined
+  }
+
+  private viewableImage(url: unknown): url is string {
+    try {
+      return typeof url === 'string' && new URL(url).protocol === 'https:'
+    } catch {
+      return false
+    }
   }
 
   private modelSupportsVision(): boolean {
+    if (this.#hosted) return this.#hosted.vision === true
+
     return this.env.HOF_MODEL_SUPPORTS_VISION?.trim().toLowerCase() === 'true'
   }
 
@@ -788,12 +843,13 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
   ): Promise<ActivityContext> {
     const sources = this.minimalOperationsEnabled()
       ? {
-          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-        }
+        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+      }
       : {
-          unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
-          mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
-        }
+        unreadNotifications: '/account/notifications?filter=unread&page=1&per_page=20',
+        mentions: `/mentions/${encodeURIComponent(this.env.HOF_USERNAME)}/posts?page=1&per_page=20`,
+      }
+
     const entries = await Promise.all(
       Object.entries(sources).map(async ([name, path]) => {
         try {
