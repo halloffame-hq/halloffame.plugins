@@ -95,7 +95,9 @@ describe('StructuredReplies', () => {
       },
       { method: 'POST', path: '/posts/second/reactions', body: { reaction: 'love' } },
     ])
-    expect(summary).toContain('Answered Ada')
+    expect(summary).toBe(
+      '- Replied to @ada: “I think it is promising.”\n- Reacted love to @auto.',
+    )
   })
 
   it('answers on the Post when a reply cannot be addressed', async () => {
@@ -188,7 +190,7 @@ describe('StructuredReplies', () => {
     const { summary } = await replies.answer([trigger()], 'rules')
 
     expect(api.writes).toEqual([])
-    expect(summary).toBe('Actions: skipped hello-world (spam).')
+    expect(summary).toBe('- Skipped @ada: spam')
   })
 
   it('asks again after an unreadable answer and fails when it stays unreadable', async () => {
@@ -249,6 +251,58 @@ describe('StructuredReplies', () => {
       },
       { index: 1, action: 'skip', note: 'spam' },
     ])
+  })
+
+  it('never publishes a placeholder note as a reply', () => {
+    const { decisions } = StructuredReplies.decisions(
+      { responses: [{ index: 0, action: 'reply', text: '', note: 'N/A' }] },
+      1,
+    )
+
+    expect(decisions).toEqual([{ index: 0, action: 'skip', note: 'N/A' }])
+  })
+
+  it('reads its own Post as its own, with its earlier exchange with the same person', async () => {
+    const edwin = { id: 'edwin-id', username: 'edwinsavvy' }
+    const comments: Record<string, Record<string, unknown>> = {
+      c1: { id: 'c1', comment: 'Me I had to go late today', user: edwin, repliesCount: 1 },
+      c2: { id: 'c2', comment: 'Nice one', user: { id: 'bo-id', username: 'bo' } },
+      c3: { id: 'c3', comment: 'Night go just short', user: edwin, parentId: null },
+    }
+    const contexts: string[] = []
+    const replies = new StructuredReplies({
+      request: async (method, path) => {
+        if (method !== 'GET') return { data: {} }
+        if (path.endsWith('/comments/c1/replies?page=1&per_page=10')) {
+          return {
+            data: [{ id: 'r1', comment: 'Late start, peak automation.', user: { username: 'kwel' } }],
+          }
+        }
+        if (path.includes('/comments?sort=oldest')) return { data: Object.values(comments) }
+        const id = path.match(/\/comments\/([^/?]+)$/u)?.[1]
+        if (id) return { data: comments[id] }
+
+        return { data: { text: 'Sunday energy', user: { id: 'kwel-id', username: 'kwel' } } }
+      },
+      ask: async (messages) => {
+        contexts.push(String(messages.at(-1)?.content))
+
+        return { responses: [] }
+      },
+      lookup: new InteractionLookup({
+        request: async () => ({}),
+        appUrl: null,
+        self: 'kwel',
+        vision: false,
+      }),
+      self: { id: 'kwel-id', username: 'kwel' },
+    })
+
+    await replies.answer([trigger({ subjectId: 'c3' })], 'rules')
+
+    expect(contexts[0]).toContain('"yours":true')
+    expect(contexts[0]).toContain('Late start, peak automation.')
+    expect(contexts[0]).toContain('Me I had to go late today')
   })
 })
 

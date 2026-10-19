@@ -11,7 +11,8 @@ type Reaction = (typeof REACTIONS)[number]
 interface InteractionContext {
   index: number
   trigger: HostedTrigger
-  post: { text: string; author: string | null }
+  /** `yours` when the agent wrote the Post, so it carries on what it started. */
+  post: { text: string; author: string | null; yours: boolean }
   comment: {
     id: string
     text: string
@@ -43,24 +44,27 @@ export interface StructuredRepliesOptions {
   self?: { id: string; username: string }
 }
 
-/** The answer the model must give: a decision per interaction and a summary. */
+/** A note that says nothing, which must never be published as a reply. */
+const PLACEHOLDER_NOTE = /^(?:n\/?a|none|null|nil|-+|\.+|skip(?:ped)?)$/iu
+
+/** The answer the model must give: one decision per interaction. */
 export const REPLY_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['responses', 'summary'],
+  required: ['responses'],
   properties: {
     responses: {
       type: 'array',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['index', 'action'],
+        required: ['index', 'action', 'text', 'note'],
         properties: {
           index: { type: 'integer', description: 'The index of the interaction this decides.' },
           action: { type: 'string', enum: ['reply', 'react', 'skip'] },
           text: {
             type: 'string',
-            description: 'For reply: the exact words to publish. Required when action is reply.',
+            description: 'For reply: the exact words to publish. An empty string otherwise.',
           },
           reaction: {
             type: 'string',
@@ -69,12 +73,12 @@ export const REPLY_SCHEMA = {
           },
           note: {
             type: 'string',
-            description: 'For skip only: a short private reason. Never put a reply here.',
+            description:
+              'For skip: a short private reason. An empty string otherwise. Never put a reply here.',
           },
         },
       },
     },
-    summary: { type: 'string' },
   },
 }
 
@@ -91,12 +95,13 @@ export class StructuredReplies {
   async answer(triggers: HostedTrigger[], systemPrompt: string): Promise<{ summary: string }> {
     const { contexts, images } = await this.collect(triggers)
     const raw = await this.decide(systemPrompt, contexts, images)
-    const { decisions, summary } = StructuredReplies.decisions(raw, contexts.length)
+    const { decisions } = StructuredReplies.decisions(raw, contexts.length)
 
+    // The summary records what was done, never what the model said it would do.
     const outcomes: string[] = []
     for (const context of contexts) {
       if (!decisions.some((decision) => decision.index === context.index)) {
-        outcomes.push(`no decision on ${context.trigger.postSlug}`)
+        outcomes.push(`No decision for ${StructuredReplies.who(context)}.`)
       }
     }
     for (const decision of decisions) {
@@ -104,26 +109,37 @@ export class StructuredReplies {
       if (!context) continue
       if (decision.action === 'skip') {
         outcomes.push(
-          `skipped ${context.trigger.postSlug}${decision.note ? ` (${decision.note})` : ''}`,
+          `Skipped ${StructuredReplies.who(context)}${decision.note ? `: ${decision.note}` : '.'}`,
         )
         continue
       }
 
       try {
         await this.carryOut(decision, context)
-        outcomes.push(`${decision.action} on ${context.trigger.postSlug}`)
+        outcomes.push(
+          decision.action === 'reply'
+            ? `Replied to ${StructuredReplies.who(context)}: “${decision.text}”`
+            : `Reacted ${decision.reaction} to ${StructuredReplies.who(context)}.`,
+        )
       } catch (error) {
         outcomes.push(
-          `could not ${decision.action} on ${context.trigger.postSlug}: ${(error as Error).message}`,
+          `Could not ${decision.action} to ${StructuredReplies.who(context)}: ${(error as Error).message}`,
         )
       }
     }
 
     return {
-      summary: [summary, outcomes.length ? `Actions: ${outcomes.join('; ')}.` : 'No actions taken.']
-        .filter(Boolean)
-        .join(' '),
+      summary: outcomes.length
+        ? outcomes.map((outcome) => `- ${outcome}`).join('\n')
+        : 'No actions taken.',
     }
+  }
+
+  /** Who an interaction came from, for the run summary. */
+  private static who(context: InteractionContext): string {
+    const author = context.comment?.author ?? context.post.author
+
+    return author ? `@${author}` : 'the Post'
   }
 
   /**
@@ -144,6 +160,8 @@ export class StructuredReplies {
           'Each one carries a background: the profiles it mentions, its hashtags, the Post it quotes,',
           'the thread around a comment, links to this platform, and its pictures.',
           'Read it before answering, and answer what the person actually said.',
+          'When post.yours is true you wrote the Post: carry on what it started, including any running joke,',
+          'and read your earlier replies in the thread so each answer continues the conversation.',
           'A comment says whom it answers in inReplyTo. When isYou is false and it does not',
           'mention you, it was written to someone else: skip it unless you clearly belong in that exchange.',
           'Pictures marked viewed are attached in order; describe only what is visible in them.',
@@ -219,7 +237,7 @@ export class StructuredReplies {
   }
 
   /** The checked decisions from the model's answer: in range, once each, and well formed. */
-  static decisions(raw: unknown, count: number): { decisions: ReplyDecision[]; summary: string } {
+  static decisions(raw: unknown, count: number): { decisions: ReplyDecision[] } {
     const answer = StructuredReplies.record(StructuredReplies.parse(raw))
     const responses = Array.isArray(answer.responses) ? answer.responses : []
     const seen = new Set<number>()
@@ -232,7 +250,12 @@ export class StructuredReplies {
 
       const note = typeof item.note === 'string' ? item.note.trim() : ''
       // A reply sometimes arrives in the note instead of the text; it is still the reply.
-      const written = typeof item.text === 'string' && item.text.trim() ? item.text : note
+      const written =
+        typeof item.text === 'string' && item.text.trim()
+          ? item.text
+          : PLACEHOLDER_NOTE.test(note)
+            ? ''
+            : note
       const text = AuthoredText.plain(written.trim()).slice(0, MAX_REPLY_LENGTH)
       const reaction = REACTIONS.find((value) => value === item.reaction)
 
@@ -246,10 +269,7 @@ export class StructuredReplies {
       seen.add(index)
     }
 
-    return {
-      decisions,
-      summary: typeof answer.summary === 'string' ? answer.summary.trim() : '',
-    }
+    return { decisions }
   }
 
   private async collect(triggers: HostedTrigger[]): Promise<{
@@ -290,6 +310,10 @@ export class StructuredReplies {
           post: {
             text: StructuredReplies.text(post.text ?? post.content).slice(0, 2000),
             author: StructuredReplies.author(post.user),
+            yours: Boolean(
+              this.options.self &&
+              String(StructuredReplies.record(post.user).id) === this.options.self.id,
+            ),
           },
           comment,
           ...(gathered ? { background: gathered.background } : {}),
@@ -324,9 +348,7 @@ export class StructuredReplies {
     if (!Object.keys(found).length) return { found: null, parent: null, comments: [] }
 
     if (typeof found.parentId !== 'string') {
-      const listed = StructuredReplies.record(await this.options.request('GET', base)).data
-
-      return { found, parent: null, comments: listed }
+      return { found, parent: null, comments: await this.conversation(base, found) }
     }
 
     const parentPath = `${base}/${encodeURIComponent(found.parentId)}`
@@ -341,6 +363,51 @@ export class StructuredReplies {
       parent: parentComment,
       comments: [{ ...parentComment, replies: StructuredReplies.record(replies).data ?? [] }],
     }
+  }
+
+  /**
+   * The comments on a Post in the order they were written, with the replies
+   * under this person's other recent comments, so an exchange that ran across
+   * several comments reads as one conversation.
+   */
+  private async conversation(base: string, comment: Record<string, unknown>): Promise<unknown> {
+    const listed = StructuredReplies.record(
+      await this.options.request('GET', `${base}?sort=oldest&page=1&per_page=20`),
+    ).data
+    if (!Array.isArray(listed)) return []
+
+    const authorId = String(StructuredReplies.record(comment.user).id ?? '')
+    const earlier = listed
+      .map((entry) => StructuredReplies.record(entry))
+      .filter(
+        (entry) =>
+          entry.id !== comment.id &&
+          String(StructuredReplies.record(entry.user).id ?? '') === authorId &&
+          Number(entry.repliesCount ?? 0) > 0,
+      )
+      .slice(-3)
+    const replies = new Map(
+      await Promise.all(
+        earlier.map(async (entry) => {
+          const answered = await this.options
+            .request(
+              'GET',
+              `${base}/${encodeURIComponent(String(entry.id))}/replies?page=1&per_page=10`,
+            )
+            .catch(() => null)
+
+          return [String(entry.id), StructuredReplies.record(answered).data ?? []] as const
+        }),
+      ),
+    )
+
+    return listed.map((entry) => {
+      const record = StructuredReplies.record(entry)
+
+      return replies.has(String(record.id))
+        ? { ...record, replies: replies.get(String(record.id)) }
+        : record
+    })
   }
 
   /** Whom a comment answers: the reply it names, else its comment, else the Post's author. */
