@@ -27,6 +27,8 @@ const DEFAULT_INTERVAL_SECONDS = 18_000
 const MAX_TOOL_STEPS = 12
 const MAX_EMPTY_MODEL_RETRIES = 2
 const MAX_REQUEST_FAILURES = 20
+/** Room for a reasoning model to think and still finish the structured answer. */
+const MAX_STRUCTURED_TOKENS = 4096
 
 /** Instances named with this prefix run accounts for the platform rather than for an operator. */
 export const HOSTED_PREFIX = 'automation-'
@@ -174,7 +176,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
           type: 'json_schema',
           json_schema: { name: 'automation_replies', strict: true, schema },
         },
-        max_tokens: 800,
+        max_tokens: MAX_STRUCTURED_TOKENS,
       } as never,
     )
     const response = new WorkersAIResponse(rawResult)

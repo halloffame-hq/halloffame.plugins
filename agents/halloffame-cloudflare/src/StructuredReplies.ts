@@ -21,6 +21,8 @@ export interface ReplyDecision {
   action: 'reply' | 'react' | 'skip'
   text?: string
   reaction?: Reaction
+  /** Why the interaction was skipped. */
+  note?: string
 }
 
 export interface StructuredRepliesOptions {
@@ -49,6 +51,7 @@ export const REPLY_SCHEMA = {
           action: { type: 'string', enum: ['reply', 'react', 'skip'] },
           text: { type: 'string' },
           reaction: { type: 'string', enum: [...REACTIONS] },
+          note: { type: 'string' },
         },
       },
     },
@@ -72,9 +75,20 @@ export class StructuredReplies {
     const { decisions, summary } = StructuredReplies.decisions(raw, contexts.length)
 
     const outcomes: string[] = []
+    for (const context of contexts) {
+      if (!decisions.some((decision) => decision.index === context.index)) {
+        outcomes.push(`no decision on ${context.trigger.postSlug}`)
+      }
+    }
     for (const decision of decisions) {
       const context = contexts[decision.index]
-      if (!context || decision.action === 'skip') continue
+      if (!context) continue
+      if (decision.action === 'skip') {
+        outcomes.push(
+          `skipped ${context.trigger.postSlug}${decision.note ? ` (${decision.note})` : ''}`,
+        )
+        continue
+      }
 
       try {
         await this.carryOut(decision, context)
@@ -113,8 +127,12 @@ export class StructuredReplies {
           'Read it before answering, and answer what the person actually said.',
           'Pictures marked viewed are attached in order; describe only what is visible in them.',
           'Never claim to have seen a picture that is not attached.',
-          'Reply with one concise, genuine answer when you have something meaningful to add,',
-          'react when a reaction says enough, and skip spam, abuse, or anything that needs no answer.',
+          'A mention of you or a question put to you is always answered with a reply,',
+          'even when the honest answer is that you cannot tell; say so briefly and share what the post,',
+          'its pictures, or its background do show.',
+          'For other interactions, reply when you have something meaningful to add,',
+          'react when a reaction says enough, and skip anything that needs no answer.',
+          'Skip spam and abuse whatever the interaction, and give a short note whenever you skip.',
           'Be careful with other agent accounts and never keep an exchange going for its own sake.',
           'Answer only in the required JSON.',
         ].join(' '),
@@ -137,13 +155,24 @@ export class StructuredReplies {
       },
     ]
 
-    if (!images.length) return await this.options.ask(messages(false), REPLY_SCHEMA)
+    // With pictures first when there are any, then without; an unreadable answer is asked again.
+    const attempts = images.length ? [true, false] : [false, false]
+    let failure: unknown = null
 
-    try {
-      return await this.options.ask(messages(true), REPLY_SCHEMA)
-    } catch {
-      return await this.options.ask(messages(false), REPLY_SCHEMA)
+    for (const withImages of attempts) {
+      try {
+        const answer = StructuredReplies.parse(
+          await this.options.ask(messages(withImages), REPLY_SCHEMA),
+        )
+        if (Array.isArray(StructuredReplies.record(answer).responses)) return answer
+
+        failure = new Error('The model did not return a readable answer.')
+      } catch (error) {
+        failure = error
+      }
     }
+
+    throw failure
   }
 
   /** The contexts with every picture marked as not seen, for a call that carries none. */
@@ -181,7 +210,8 @@ export class StructuredReplies {
       } else if (item.action === 'react' && reaction) {
         decisions.push({ index, action: 'react', reaction })
       } else {
-        decisions.push({ index, action: 'skip' })
+        const note = typeof item.note === 'string' ? item.note.trim().slice(0, 200) : ''
+        decisions.push({ index, action: 'skip', ...(note ? { note } : {}) })
       }
       seen.add(index)
     }
@@ -284,14 +314,25 @@ export class StructuredReplies {
     return null
   }
 
+  /** The model's JSON, also when it arrives fenced or wrapped in prose. */
   private static parse(raw: unknown): unknown {
     if (typeof raw !== 'string') return raw
 
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return {}
+    const candidates = [
+      raw,
+      raw.match(/```(?:json)?\s*([\s\S]*?)```/u)?.[1],
+      raw.includes('{') ? raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1) : undefined,
+    ]
+    for (const candidate of candidates) {
+      if (!candidate) continue
+      try {
+        return JSON.parse(candidate)
+      } catch {
+        // Try the next reading.
+      }
     }
+
+    return {}
   }
 
   private static text(value: unknown): string {

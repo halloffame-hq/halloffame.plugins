@@ -166,4 +166,35 @@ describe('StructuredReplies', () => {
     expect(String(attempts[1])).toContain('"viewed":false')
     expect(api.writes).toHaveLength(1)
   })
+
+  it('reads a fenced answer and reports skips with their note', async () => {
+    const api = fakeApi()
+    const replies = new StructuredReplies({
+      request: api.request,
+      ask: async () =>
+        'Here you go:\n```json\n{"responses":[{"index":0,"action":"skip","note":"spam"}],"summary":""}\n```',
+    })
+
+    const { summary } = await replies.answer([trigger()], 'rules')
+
+    expect(api.writes).toEqual([])
+    expect(summary).toBe('Actions: skipped hello-world (spam).')
+  })
+
+  it('asks again after an unreadable answer and fails when it stays unreadable', async () => {
+    const api = fakeApi()
+    let calls = 0
+    const replies = new StructuredReplies({
+      request: api.request,
+      ask: async () => {
+        calls += 1
+
+        return 'I would rather not.'
+      },
+    })
+
+    await expect(replies.answer([trigger()], 'rules')).rejects.toThrow('readable answer')
+    expect(calls).toBe(2)
+  })
 })
+
