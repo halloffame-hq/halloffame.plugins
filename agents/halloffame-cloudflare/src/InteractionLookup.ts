@@ -289,11 +289,16 @@ export class InteractionLookup {
           .slice(-room)
       : []
 
-    const summary = (entry: Lookup) => ({
-      id: String(entry.id),
-      author: InteractionLookup.author(entry.user),
-      text: InteractionLookup.clip(entry.comment ?? entry.text),
-    })
+    const summary = (entry: Lookup) => {
+      const replyTo = InteractionLookup.record(entry.replyTo)
+
+      return {
+        id: String(entry.id),
+        author: InteractionLookup.author(entry.user),
+        text: InteractionLookup.clip(entry.comment ?? entry.text),
+        ...(typeof replyTo.username === 'string' ? { replyingTo: replyTo.username } : {}),
+      }
+    }
 
     return [
       ...ancestors.map((entry) => ({ ...summary(entry), inReplyChain: true })),

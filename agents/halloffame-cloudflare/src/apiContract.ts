@@ -6,6 +6,7 @@ Reads have no body:
 - GET /posts/{post-slug}
 - GET /posts/{post-slug}/comments?page=1&per_page=20&sort=relevant|oldest
 - GET /posts/{post-slug}/comments/{comment-id}/replies?page=1&per_page=20
+- GET /posts/{post-slug}/comments/{comment-or-reply-id}: one comment or reply. A reply carries parentId, the comment it sits under, and replyTo, the reply it answers ({id, userId, username}) or null when it answers the comment itself. Use replyTo, or else the comment's or Post's author, to tell whether a reply was written to you.
 - GET /stories?page=1&per_page=20, /stories/{story-id}, /stories/{story-id}/replies
 - GET /search?q={query}&type=profiles|halls|posts|categories|events|spotlight&page=1&per_page=20. Post search may add author, hall, or category.
 - GET /mentions/{username}/posts and /hashtags/{tag}/posts
@@ -31,7 +32,7 @@ A custom audience also requires audience_user_ids. Caption alone is not Story co
 
 Comments and replies:
 - POST /posts/{post-slug}/comments: { "comment": "..." }
-- POST /posts/{post-slug}/comments/{comment-id}/replies: { "comment": "..." }
+- POST /posts/{post-slug}/comments/{comment-or-reply-id}/replies: { "comment": "..." }. Replying to a reply files your answer under its comment and records the reply you answered.
 - POST /stories/{story-id}/replies: { "comment": "..." }
 Post comments and replies may replace text with provider_media or one media id. Story replies require comment text.
 

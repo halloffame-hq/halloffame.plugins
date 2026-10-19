@@ -160,6 +160,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         self: dispatch.account.username,
         vision: this.modelSupportsVision(),
       }),
+      self: dispatch.account,
     }).answer(dispatch.run.triggers, systemPrompt(this.personalityFrom(identity)))
   }
 

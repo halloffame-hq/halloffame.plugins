@@ -16,25 +16,31 @@ const trigger = (overrides: Partial<HostedTrigger> = {}): HostedTrigger => ({
   ...overrides,
 })
 
-/** A fake API that records writes and can refuse replies. */
-function fakeApi(refuseReplies = false) {
+/**
+ * A fake API that records writes and can refuse replies. comment-9 is Ada's
+ * reply under comment-1, which Kwel wrote; replyTo names whom Ada answered.
+ */
+function fakeApi(refuseReplies = false, replyTo: Record<string, unknown> | null = null) {
   const writes: Array<{ method: HttpMethod; path: string; body?: unknown }> = []
+  const comments: Record<string, Record<string, unknown>> = {
+    'comment-1': { id: 'comment-1', comment: 'Top level', user: { id: 'kwel-id', username: 'kwel' } },
+    'comment-9': {
+      id: 'comment-9',
+      comment: 'What do you think?',
+      user: { id: 'ada-id', username: 'ada' },
+      parentId: 'comment-1',
+      replyTo,
+    },
+  }
   const request = async (method: HttpMethod, path: string, body?: unknown) => {
-    if (method === 'GET' && path.endsWith('/comments')) {
-      return {
-        data: [
-          {
-            id: 'comment-1',
-            comment: 'Top level',
-            replies: [
-              { id: 'comment-9', comment: 'What do you think?', user: { username: 'ada' } },
-            ],
-          },
-        ],
-      }
+    if (method === 'GET') {
+      if (path.includes('/comments/comment-1/replies')) return { data: [comments['comment-9']] }
+      const id = path.match(/\/comments\/([^/?]+)$/u)?.[1]
+      if (id) return { data: comments[id] ?? null }
+      if (path.endsWith('/comments')) return { data: [comments['comment-1']] }
+
+      return { data: { text: 'A post about agents.', user: { id: 'auto-id', username: 'auto' } } }
     }
-    if (method === 'GET')
-      return { data: { text: 'A post about agents.', user: { username: 'auto' } } }
     if (refuseReplies && path.endsWith('/replies')) throw new Error('Not found')
 
     writes.push({ method, path, body })
@@ -130,7 +136,7 @@ describe('StructuredReplies', () => {
     const attempts: unknown[] = []
     const replies = new StructuredReplies({
       request: async (method, path, body) =>
-        method === 'GET' && !path.endsWith('/comments')
+        method === 'GET' && !path.includes('/comments')
           ? {
               data: {
                 text: 'Look at this',
@@ -196,5 +202,27 @@ describe('StructuredReplies', () => {
     await expect(replies.answer([trigger()], 'rules')).rejects.toThrow('readable answer')
     expect(calls).toBe(2)
   })
-})
 
+  it('tells the agent whether a reply was written to it', async () => {
+    const contexts: string[] = []
+    const ask = async (messages: Record<string, unknown>[]) => {
+      contexts.push(String(messages.at(-1)?.content))
+
+      return { responses: [], summary: '' }
+    }
+    const self = { id: 'kwel-id', username: 'kwel' }
+
+    await new StructuredReplies({ request: fakeApi().request, ask, self }).answer(
+      [trigger({ event: 'reply' })],
+      'rules',
+    )
+    await new StructuredReplies({
+      request: fakeApi(false, { id: 'comment-5', userId: 'bo-id', username: 'bo' }).request,
+      ask,
+      self,
+    }).answer([trigger({ event: 'reply' })], 'rules')
+
+    expect(contexts[0]).toContain('"inReplyTo":{"author":"kwel","isYou":true}')
+    expect(contexts[1]).toContain('"inReplyTo":{"author":"bo","isYou":false}')
+  })
+})

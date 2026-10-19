@@ -11,7 +11,13 @@ interface InteractionContext {
   index: number
   trigger: HostedTrigger
   post: { text: string; author: string | null }
-  comment: { id: string; text: string; author: string | null } | null
+  comment: {
+    id: string
+    text: string
+    author: string | null
+    /** Whom the comment answers: a reply it was written to, its comment, or the Post. */
+    inReplyTo: { author: string | null; isYou: boolean }
+  } | null
   background?: InteractionBackground
 }
 
@@ -32,6 +38,8 @@ export interface StructuredRepliesOptions {
   ask: (messages: Record<string, unknown>[], schema: Record<string, unknown>) => Promise<unknown>
   /** Gathers what each interaction refers to before it is answered. */
   lookup?: InteractionLookup
+  /** The account answering, so the agent knows which comments were written to it. */
+  self?: { id: string; username: string }
 }
 
 /** The answer the model must give: a decision per interaction and a summary. */
@@ -125,6 +133,8 @@ export class StructuredReplies {
           'Each one carries a background: the profiles it mentions, its hashtags, the Post it quotes,',
           'the thread around a comment, links to this platform, and its pictures.',
           'Read it before answering, and answer what the person actually said.',
+          'A comment says whom it answers in inReplyTo. When isYou is false and it does not',
+          'mention you, it was written to someone else: skip it unless you clearly belong in that exchange.',
           'Pictures marked viewed are attached in order; describe only what is visible in them.',
           'Never claim to have seen a picture that is not attached.',
           'A mention of you or a question put to you is always answered with a reply,',
@@ -238,19 +248,15 @@ export class StructuredReplies {
         let comments: unknown = []
 
         if (trigger.subjectType === 'comment' && trigger.subjectId) {
-          const listed = await this.options.request(
-            'GET',
-            `/posts/${encodeURIComponent(trigger.postSlug)}/comments`,
-          )
+          const thread = await this.thread(trigger.postSlug, trigger.subjectId)
+          comments = thread.comments
 
-          comments = StructuredReplies.record(listed).data
-          const found = StructuredReplies.findComment(comments, trigger.subjectId)
-
-          if (found) {
+          if (thread.found) {
             comment = {
               id: trigger.subjectId,
-              text: StructuredReplies.text(found.comment ?? found.text),
-              author: StructuredReplies.author(found.user),
+              text: StructuredReplies.text(thread.found.comment ?? thread.found.text),
+              author: StructuredReplies.author(thread.found.user),
+              inReplyTo: this.inReplyTo(thread.found, thread.parent, post),
             }
           }
         }
@@ -272,6 +278,67 @@ export class StructuredReplies {
     )
 
     return { contexts, images }
+  }
+
+  /**
+   * The comment an interaction is about, read directly so a reply is found
+   * wherever it sits, with the thread around it: a reply's comment and its
+   * replies, or a comment's neighbours on the Post.
+   */
+  private async thread(
+    postSlug: string,
+    commentId: string,
+  ): Promise<{
+    found: Record<string, unknown> | null
+    parent: Record<string, unknown> | null
+    comments: unknown
+  }> {
+    const base = `/posts/${encodeURIComponent(postSlug)}/comments`
+    const found = StructuredReplies.record(
+      StructuredReplies.record(
+        await this.options
+          .request('GET', `${base}/${encodeURIComponent(commentId)}`)
+          .catch(() => null),
+      ).data,
+    )
+    if (!Object.keys(found).length) return { found: null, parent: null, comments: [] }
+
+    if (typeof found.parentId !== 'string') {
+      const listed = StructuredReplies.record(await this.options.request('GET', base)).data
+
+      return { found, parent: null, comments: listed }
+    }
+
+    const parentPath = `${base}/${encodeURIComponent(found.parentId)}`
+    const [parent, replies] = await Promise.all([
+      this.options.request('GET', parentPath),
+      this.options.request('GET', `${parentPath}/replies?page=1&per_page=20`),
+    ])
+    const parentComment = StructuredReplies.record(StructuredReplies.record(parent).data)
+
+    return {
+      found,
+      parent: parentComment,
+      comments: [{ ...parentComment, replies: StructuredReplies.record(replies).data ?? [] }],
+    }
+  }
+
+  /** Whom a comment answers: the reply it names, else its comment, else the Post's author. */
+  private inReplyTo(
+    comment: Record<string, unknown>,
+    parent: Record<string, unknown> | null,
+    post: Record<string, unknown>,
+  ): { author: string | null; isYou: boolean } {
+    const replyTo = StructuredReplies.record(comment.replyTo)
+    const user = StructuredReplies.record(parent?.user ?? post.user)
+    const userId = typeof replyTo.userId === 'string' ? replyTo.userId : user.id
+    const author =
+      typeof replyTo.username === 'string' ? replyTo.username : StructuredReplies.author(user)
+
+    return {
+      author,
+      isYou: Boolean(this.options.self && String(userId) === this.options.self.id),
+    }
   }
 
   private async carryOut(decision: ReplyDecision, context: InteractionContext): Promise<void> {
@@ -297,21 +364,6 @@ export class StructuredReplies {
     }
 
     await this.options.request('POST', `${post}/comments`, { comment: decision.text })
-  }
-
-  /** A comment by id, anywhere in a list of comments and their replies. */
-  private static findComment(value: unknown, id: string): Record<string, unknown> | null {
-    if (!Array.isArray(value)) return null
-
-    for (const entry of value) {
-      const item = StructuredReplies.record(entry)
-      if (String(item.id) === id) return item
-
-      const nested = StructuredReplies.findComment(item.replies, id)
-      if (nested) return nested
-    }
-
-    return null
   }
 
   /** The model's JSON, also when it arrives fenced or wrapped in prose. */
