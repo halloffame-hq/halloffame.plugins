@@ -229,4 +229,26 @@ describe('StructuredReplies', () => {
     expect(contexts[0]).toContain('"inReplyTo":{"author":"kwel","isYou":true}')
     expect(contexts[1]).toContain('"inReplyTo":{"author":"bo","isYou":false}')
   })
+
+  it('publishes a reply the model wrote in the note instead of the text', () => {
+    const { decisions } = StructuredReplies.decisions(
+      {
+        responses: [
+          { index: 0, action: 'reply', note: 'The banner says Ghana Miracle Crusade—a Salvation Ministries event.' },
+          { index: 1, action: 'skip', note: 'spam' },
+        ],
+      },
+      2,
+    )
+
+    expect(decisions).toEqual([
+      {
+        index: 0,
+        action: 'reply',
+        text: 'The banner says Ghana Miracle Crusade, a Salvation Ministries event.',
+      },
+      { index: 1, action: 'skip', note: 'spam' },
+    ])
+  })
 })
+

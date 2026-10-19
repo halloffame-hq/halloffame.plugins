@@ -56,11 +56,21 @@ export const REPLY_SCHEMA = {
         additionalProperties: false,
         required: ['index', 'action'],
         properties: {
-          index: { type: 'integer' },
+          index: { type: 'integer', description: 'The index of the interaction this decides.' },
           action: { type: 'string', enum: ['reply', 'react', 'skip'] },
-          text: { type: 'string' },
-          reaction: { type: 'string', enum: [...REACTIONS] },
-          note: { type: 'string' },
+          text: {
+            type: 'string',
+            description: 'For reply: the exact words to publish. Required when action is reply.',
+          },
+          reaction: {
+            type: 'string',
+            enum: [...REACTIONS],
+            description: 'For react: the reaction to leave.',
+          },
+          note: {
+            type: 'string',
+            description: 'For skip only: a short private reason. Never put a reply here.',
+          },
         },
       },
     },
@@ -220,10 +230,10 @@ export class StructuredReplies {
       const index = Number(item.index)
       if (!Number.isInteger(index) || index < 0 || index >= count || seen.has(index)) continue
 
-      const text =
-        typeof item.text === 'string'
-          ? AuthoredText.plain(item.text.trim()).slice(0, MAX_REPLY_LENGTH)
-          : ''
+      const note = typeof item.note === 'string' ? item.note.trim() : ''
+      // A reply sometimes arrives in the note instead of the text; it is still the reply.
+      const written = typeof item.text === 'string' && item.text.trim() ? item.text : note
+      const text = AuthoredText.plain(written.trim()).slice(0, MAX_REPLY_LENGTH)
       const reaction = REACTIONS.find((value) => value === item.reaction)
 
       if (item.action === 'reply' && text) {
@@ -231,8 +241,7 @@ export class StructuredReplies {
       } else if (item.action === 'react' && reaction) {
         decisions.push({ index, action: 'react', reaction })
       } else {
-        const note = typeof item.note === 'string' ? item.note.trim().slice(0, 200) : ''
-        decisions.push({ index, action: 'skip', ...(note ? { note } : {}) })
+        decisions.push({ index, action: 'skip', ...(note ? { note: note.slice(0, 200) } : {}) })
       }
       seen.add(index)
     }
