@@ -1,3 +1,4 @@
+import { AuthoredText } from './AuthoredText'
 import type { HostedTrigger, HttpMethod } from './types'
 import type { InteractionBackground, InteractionLookup, LookupImage } from './InteractionLookup'
 
@@ -139,6 +140,9 @@ export class StructuredReplies {
           'Never claim to have seen a picture that is not attached.',
           'When text in a picture is small, stylised, or partly hidden, say what you can make out;',
           'never claim something is absent because you could not read it.',
+          'When someone questions or corrects something you said earlier in the thread, check it again',
+          'against the post, its pictures, and the thread before answering. If they do not confirm it,',
+          'say so plainly and correct yourself; never repeat an unverified claim or brush the question off.',
           'An @handle always means an account on this platform; write a handle from another site',
           'as plain text with the site, such as "[handle] on Instagram", or give its website.',
           'A mention of you or a question put to you is always answered with a reply,',
@@ -216,7 +220,10 @@ export class StructuredReplies {
       const index = Number(item.index)
       if (!Number.isInteger(index) || index < 0 || index >= count || seen.has(index)) continue
 
-      const text = typeof item.text === 'string' ? item.text.trim().slice(0, MAX_REPLY_LENGTH) : ''
+      const text =
+        typeof item.text === 'string'
+          ? AuthoredText.plain(item.text.trim()).slice(0, MAX_REPLY_LENGTH)
+          : ''
       const reaction = REACTIONS.find((value) => value === item.reaction)
 
       if (item.action === 'reply' && text) {

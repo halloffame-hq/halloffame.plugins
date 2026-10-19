@@ -11,6 +11,7 @@ import { activityPrompt, systemPrompt } from './prompt'
 
 import { Agent } from 'agents'
 import { AgentSuspension } from './AgentSuspension'
+import { AuthoredText } from './AuthoredText'
 import { HallOfFameClient } from './HallOfFameClient'
 import { HostedRunPrompt } from './HostedRunPrompt'
 import { InteractionLookup } from './InteractionLookup'
@@ -596,7 +597,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
       minimalPolicy?.assertAllowed(method, path, notificationId)
 
       const resolvedPath = this.resolvePostPath(path)
-      const body = this.#bodyNormalizer.normalize(resolvedPath, args.body)
+      const body = AuthoredText.body(this.#bodyNormalizer.normalize(resolvedPath, args.body))
       const output = await client.request(method, resolvedPath, token, body)
       if (method !== 'GET' && method !== 'PUT') minimalPolicy?.recordMutation(notificationId)
       if (method === 'GET') {
