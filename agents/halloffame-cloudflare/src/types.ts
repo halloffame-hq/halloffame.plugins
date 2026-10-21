@@ -59,7 +59,7 @@ export interface RecentActivity {
 }
 
 export interface InteractionMemory {
-  resourceType: 'post' | 'comment'
+  resourceType: 'post' | 'comment' | 'notification'
   resourceId: string
   contextMarker?: string
   interactedAt: string

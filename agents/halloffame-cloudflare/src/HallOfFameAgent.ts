@@ -16,6 +16,7 @@ import { HallOfFameClient } from './HallOfFameClient'
 import { HostedRunPrompt } from './HostedRunPrompt'
 import { ImageSearch, type ImageSource } from './ImageSearch'
 import { InteractionLookup } from './InteractionLookup'
+import { ActivityReplyGuard } from './ActivityReplyGuard'
 import { MinimalInteractionPolicy } from './MinimalInteractionPolicy'
 import { PICTWO_CATEGORIES, PICTWO_SHAPES, Pictwo } from './Pictwo'
 import { RequestBodyNormalizer } from './RequestBodyNormalizer'
@@ -37,6 +38,11 @@ const MAX_OUTPUT_TOKENS = 4096
 export const HOSTED_PREFIX = 'automation-'
 
 type ModelMessage = Record<string, unknown>
+
+interface RunGuards {
+  minimal?: MinimalInteractionPolicy
+  replies?: ActivityReplyGuard
+}
 
 interface ActivityContext {
   checks: Record<string, 'ok' | 'unavailable'>
@@ -532,10 +538,16 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     const activityContext = preloadActivity
       ? await this.loadActivityContext(client, token, memory)
       : undefined
-    const minimalPolicy =
-      minimalCycle && activityContext
-        ? new MinimalInteractionPolicy(activityContext.data.unreadNotifications)
-        : undefined
+    if (activityContext) await this.settleAnswered(client, token, activityContext, memory)
+    const guards: RunGuards = {
+      minimal:
+        minimalCycle && activityContext
+          ? new MinimalInteractionPolicy(activityContext.data.unreadNotifications)
+          : undefined,
+      replies: activityContext
+        ? new ActivityReplyGuard(activityContext.data.unreadNotifications, memory)
+        : undefined,
+    }
     if (activityContext) {
       this.setState({ ...this.state, lastActivityChecks: activityContext.checks })
     }
@@ -602,7 +614,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
         for (const call of calls) {
           const output = call.argumentError
             ? { error: call.argumentError, retriable: true }
-            : await this.executeToolSafely(call, token, memory, minimalPolicy)
+            : await this.executeToolSafely(call, token, memory, guards)
           const failure = this.asRecord(output).error
           steps.push(
             `${this.describeStep(call)}${typeof failure === 'string' ? ` (failed: ${failure.slice(0, 160)})` : ''}`,
@@ -664,7 +676,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     call: ToolCall,
     _token: string,
     memory: SocialMemory,
-    minimalPolicy?: MinimalInteractionPolicy,
+    guards: RunGuards = {},
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const client = this.createClient()
@@ -679,17 +691,20 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
       const notificationId =
         typeof args.notification_id === 'string' ? args.notification_id : undefined
-      minimalPolicy?.assertAllowed(method, path, notificationId)
+      guards.minimal?.assertAllowed(method, path, notificationId)
 
       const resolvedPath = this.resolvePostPath(path)
+      guards.replies?.assertAllowed(method, resolvedPath, notificationId)
+      const answering = method === 'POST' ? guards.replies?.fresh(notificationId) : undefined
       const body = AuthoredText.body(this.#bodyNormalizer.normalize(resolvedPath, args.body))
       const output = await client.request(method, resolvedPath, token, body)
-      if (method !== 'GET' && method !== 'PUT') minimalPolicy?.recordMutation(notificationId)
+      if (method !== 'GET' && method !== 'PUT') guards.minimal?.recordMutation(notificationId)
       if (method === 'GET') {
         this.indexResources(output)
         this.annotateInteractions(output, memory)
       }
       if (method === 'POST') this.rememberInteraction(resolvedPath, memory)
+      if (answering) await this.settleNotification(client, token, answering, guards.replies!)
 
       return output
     }
@@ -771,7 +786,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     call: ToolCall,
     token: string,
     memory: SocialMemory,
-    minimalPolicy?: MinimalInteractionPolicy,
+    guards: RunGuards = {},
   ): Promise<unknown> {
     const args = this.asRecord(call.arguments)
     const method = this.isMethod(args.method) ? args.method : 'POST'
@@ -779,7 +794,7 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
 
     for (let attempt = 1; attempt <= this.#retryPolicy.maxAttempts; attempt += 1) {
       try {
-        return await this.executeTool(call, token, memory, minimalPolicy)
+        return await this.executeTool(call, token, memory, guards)
       } catch (error) {
         lastError = error
         const retriable = this.#retryPolicy.isRetriable(error, method)
@@ -1165,6 +1180,50 @@ export class HallOfFameAgent extends Agent<Env, AgentState> {
     }
 
     Object.values(record).forEach((item) => this.indexResources(item))
+  }
+
+  /** Record an answered notification and mark it read, so no later cycle answers it again. */
+  private async settleNotification(
+    client: HallOfFameClient,
+    token: string,
+    notificationId: string,
+    replies: ActivityReplyGuard,
+  ): Promise<void> {
+    this.setState({ ...this.state, memory: replies.answered(notificationId) })
+
+    await this.markRead(client, token, notificationId)
+  }
+
+  /** Drop notifications an earlier cycle already answered from this cycle, marking them read. */
+  private async settleAnswered(
+    client: HallOfFameClient,
+    token: string,
+    context: ActivityContext,
+    memory: SocialMemory,
+  ): Promise<void> {
+    const notifications = this.asRecord(context.data.unreadNotifications)
+    if (!Array.isArray(notifications.data)) return
+
+    const answered = ActivityReplyGuard.ids(notifications).filter((id) => memory.answered(id))
+    if (answered.length === 0) return
+
+    context.data.unreadNotifications = {
+      ...notifications,
+      data: notifications.data.filter((item) => !answered.includes(String(this.asRecord(item).id))),
+    }
+    await Promise.all(answered.map((id) => this.markRead(client, token, id)))
+  }
+
+  private async markRead(client: HallOfFameClient, token: string, notificationId: string) {
+    try {
+      await client.request(
+        'PUT',
+        `/account/notifications/${encodeURIComponent(notificationId)}/read`,
+        token,
+      )
+    } catch {
+      // Best effort: the answered record still keeps it from being answered again.
+    }
   }
 
   private rememberInteraction(path: string, memory: SocialMemory): void {

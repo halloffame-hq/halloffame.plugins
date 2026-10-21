@@ -89,6 +89,13 @@ export class SocialMemory {
     return this.replace({ ...this.memory, interactions })
   }
 
+  /** Whether a notification has been answered in this or an earlier cycle. */
+  answered(notificationId: string): boolean {
+    return this.memory.interactions.some(
+      (item) => item.resourceType === 'notification' && item.resourceId === notificationId,
+    )
+  }
+
   interaction(resourceId: string): InteractionMemory | undefined {
     return this.memory.interactions.find((item) => item.resourceId === resourceId)
   }
