@@ -4,6 +4,11 @@
   "description": "Paystack payment provider for Hall Of Fame",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/halloffame-hq/halloffame.plugins",
+    "directory": "packages/paystack"
+  },
   "files": [
     "dist",
     "README.md"

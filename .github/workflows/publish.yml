@@ -1,0 +1,122 @@
+name: Publish
+
+# Publishes one workspace package to npm, either by hand with an explicit
+# package and version, or when a GitHub release is published. A release tag
+# names the package and version, such as "@hallofame/cli@0.1.29" or
+# "cli@v0.1.29"; a leading "v" on the version is dropped.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish
+        required: true
+        type: choice
+        options:
+          - '@hallofame/capacitor-native'
+          - '@hallofame/cli'
+          - '@hallofame/payment-provider-paystack'
+          - '@hallofame/cloudflare-agent'
+      version:
+        description: Version to publish, such as 1.2.3 or 1.3.0-beta.1
+        required: true
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve package and version
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$EVENT" == release ]]; then
+            package="${RELEASE_TAG%@*}"
+            version="${RELEASE_TAG##*@}"
+
+            if [[ -z "$package" || "$package" == "$RELEASE_TAG" ]]; then
+              echo "::error::Release tag '$RELEASE_TAG' must look like <package>@<version>"
+              exit 1
+            fi
+          else
+            package="$INPUT_PACKAGE"
+            version="$INPUT_VERSION"
+          fi
+
+          [[ "$package" == @* ]] || package="@hallofame/$package"
+          version="${version#v}"
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$version' is not a semantic version"
+            exit 1
+          fi
+
+          dir=$(PACKAGE="$package" node -e '
+            const fs = require("fs");
+            const dirs = ["packages", "agents"].flatMap((root) =>
+              fs.readdirSync(root).map((name) => `${root}/${name}`),
+            );
+            const match = dirs.find((dir) => {
+              try {
+                return JSON.parse(fs.readFileSync(`${dir}/package.json`, "utf8")).name === process.env.PACKAGE;
+              } catch {
+                return false;
+              }
+            });
+            if (match) console.log(match);
+          ')
+
+          if [[ -z "$dir" ]]; then
+            echo "::error::No workspace package is named '$package'"
+            exit 1
+          fi
+
+          # Prereleases go to the "next" dist-tag so they never become "latest".
+          if [[ "$version" == *-* ]]; then tag=next; else tag=latest; fi
+
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Set package version
+        working-directory: ${{ steps.target.outputs.dir }}
+        run: npm pkg set version=${{ steps.target.outputs.version }}
+
+      - name: Check
+        working-directory: ${{ steps.target.outputs.dir }}
+        run: pnpm check
+
+      - name: Pack
+        working-directory: ${{ steps.target.outputs.dir }}
+        run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+
+      - name: Publish
+        run: npm publish "$RUNNER_TEMP"/pack/*.tgz --access public --provenance --tag ${{ steps.target.outputs.tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

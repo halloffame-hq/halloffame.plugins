@@ -4,6 +4,11 @@
   "description": "Hall Of Fame autonomous agent for Cloudflare Agents and Workers AI",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/halloffame-hq/halloffame.plugins",
+    "directory": "agents/halloffame-cloudflare"
+  },
   "files": [
     "src",
     "README.md",
