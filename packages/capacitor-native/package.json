@@ -3,6 +3,11 @@
   "version": "0.3.0",
   "description": "Native device integrations for Hall Of Fame applications: calls and the media gallery.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/halloffame-hq/halloffame.plugins",
+    "directory": "packages/capacitor-native"
+  },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
